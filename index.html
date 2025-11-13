@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Realtime Survey Demo</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #survey { margin-bottom: 20px; }
+    input[type=text] { width: 300px; padding: 5px; }
+    button { padding: 5px 10px; }
+    canvas { max-width: 800px; max-height: 400px; }
+  </style>
+</head>
+<body>
+  <h2>Realtime Survey (No Data Stored)</h2>
+
+  <div id="survey">
+    <input type="text" id="answerInput" placeholder="พิมพ์คำตอบของคุณ">
+    <button onclick="submitAnswer()">ส่งคำตอบ</button>
+  </div>
+
+  <canvas id="chart"></canvas>
+
+  <script>
+    // =============================
+    // Data Structure in Memory
+    // =============================
+    const groups = []; // {name: string, count: number}
+
+    // =============================
+    // Utility: Simple Fuzzy Match
+    // =============================
+    function similarity(a, b) {
+      a = a.toLowerCase().trim();
+      b = b.toLowerCase().trim();
+      const longer = a.length > b.length ? a : b;
+      const shorter = a.length > b.length ? b : a;
+      const longerLength = longer.length;
+      if (longerLength === 0) return 1.0;
+      const distance = editDistance(longer, shorter);
+      return (longerLength - distance) / longerLength;
+    }
+
+    function editDistance(a, b) {
+      const matrix = [];
+      for (let i = 0; i <= b.length; i++) {
+        matrix[i] = [i];
+      }
+      for (let j = 0; j <= a.length; j++) {
+        matrix[0][j] = j;
+      }
+      for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+          if (b.charAt(i-1) === a.charAt(j-1)) {
+            matrix[i][j] = matrix[i-1][j-1];
+          } else {
+            matrix[i][j] = Math.min(
+              matrix[i-1][j-1] + 1,
+              Math.min(matrix[i][j-1] +1, matrix[i-1][j]+1)
+            );
+          }
+        }
+      }
+      return matrix[b.length][a.length];
+    }
+
+    // =============================
+    // Chart Setup
+    // =============================
+    const ctx = document.getElementById('chart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'bubble',
+      data: { datasets: [] },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { display: false },
+          y: { display: false }
+        }
+      }
+    });
+
+    // =============================
+    // Submit Answer
+    // =============================
+    function submitAnswer() {
+      const input = document.getElementById('answerInput');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+
+      // Check similarity with existing groups
+      const threshold = 0.6; // adjust 0.0 - 1.0
+      let matched = false;
+      for (let g of groups) {
+        if (similarity(g.name, text) >= threshold) {
+          g.count++;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        groups.push({name: text, count: 1});
+      }
+
+      updateChart();
+    }
+
+    // =============================
+    // Update Bubble Chart
+    // =============================
+    function updateChart() {
+      chart.data.datasets = groups.map((g, i) => ({
+        label: g.name,
+        data: [{ x: Math.random()*100, y: Math.random()*100, r: g.count * 8 }],
+        backgroundColor: `hsl(${i*60 % 360}, 70%, 50%)`
+      }));
+      chart.update();
+    }
+  </script>
+</body>
+</html>
