@@ -548,43 +548,19 @@
             );
           })
         ),
-        React.createElement('div', { className: "p-4 border-t border-gray-200 text-center bg-gray-100/50 mt-6" },
-          React.createElement('p', { className: "text-xs text-gray-500 font-light" }, "Produced by : Training Specialist"),
-          React.createElement('p', { className: "text-xs text-blue-800 font-bold mt-1" }, "PRU - Academy")
+        // moved credit up and added spacing from menu
+        React.createElement('div', { className: "px-4 mt-4" },
+          React.createElement('div', { className: "p-3 bg-white rounded-lg border border-gray-100 text-center" },
+            React.createElement('p', { className: "text-xs text-gray-500 font-light mb-1" }, "Produced by : Training Specialist"),
+            React.createElement('p', { className: "text-xs text-blue-800 font-bold" }, "PRU - Academy")
+          )
         )
+        // removed bottom credit (kept only the new position above)
       )
     );
 
-    const renderIncomePage = () => {
-      const multiplier = incomeMode === 'monthly' ? 12 : 1;
-      
-      // Calculate expense for each income type
-      const calculateExpenseForIncome = (inc) => {
-        if (!inc.active) return 0;
-        
-        const amount = inc.amount * multiplier;
-        const typeInfo = INCOME_TYPES.find(t => t.id === inc.typeId);
-        
-        if (inc.typeId === 1 || inc.typeId === 2) {
-          // Combine type 1 and 2 for the 100k cap
-          const type1 = incomes.find(i => i.typeId === 1);
-          const type2 = incomes.find(i => i.typeId === 2);
-          const totalAmount = ((type1?.amount || 0) + (type2?.amount || 0)) * multiplier;
-          const totalExpense = Math.min(totalAmount * 0.5, 100000);
-          
-          // Allocate proportionally
-          if (totalAmount === 0) return 0;
-          return (amount / totalAmount) * totalExpense;
-        }
-        
-        if (inc.typeId === 3) {
-          return Math.min(amount * 0.5, 100000);
-        }
-        
-        return amount * inc.expenseRate;
-      };
-
-      return React.createElement('div', { className: "space-y-6 animate-in slide-in-from-bottom-4 duration-500" },
+    const renderIncomePage = () => (
+      React.createElement('div', { className: "space-y-6 animate-in slide-in-from-bottom-4 duration-500" },
         React.createElement('div', { className: "flex justify-between items-center mb-6" },
           React.createElement('h2', { className: "text-2xl font-bold text-gray-800" }, "ข้อมูลรายได้"),
           React.createElement('div', { className: "flex bg-gray-200 p-1 rounded-xl text-sm font-medium shadow-inner" },
@@ -605,9 +581,6 @@
           incomes.map((inc) => {
             const typeInfo = INCOME_TYPES.find(t => t.id === inc.typeId);
             if (!inc.active && inc.typeId !== 1) return null;
-            
-            const expenseAmount = calculateExpenseForIncome(inc);
-            const annualAmount = inc.amount * multiplier;
 
             return React.createElement('div', { key: inc.typeId, className: "bg-white p-5 rounded-xl border border-gray-200 shadow-sm relative group hover:border-blue-300 transition-all" },
               React.createElement('div', { className: "flex justify-between items-start mb-3" },
@@ -619,21 +592,15 @@
                       className: "text-gray-400 hover:text-blue-500 transition-colors"
                     }, React.createElement(Info, { size: 16 }))
                   ),
-                  incomeMode === 'monthly' && inc.amount > 0 && (
-                    React.createElement('p', { className: "text-xs text-green-600 font-medium mt-1" }, 
-                      `รายได้ต่อปี: ${annualAmount.toLocaleString()} บาท`
-                    )
-                  ),
-                  typeInfo.subOptions && inc.active ? 
-                    React.createElement('div', { className: "mt-2" },
-                      React.createElement('div', { className: "border-t-2 border-yellow-500 pt-2" },
-                        React.createElement('select', {
-                          className: "w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 text-gray-600 bg-yellow-50 border border-yellow-200",
-                          value: inc.expenseRate,
-                          onChange: (e) => handleIncomeChange(inc.typeId, 'expenseRate', parseFloat(e.target.value))
-                        }, typeInfo.subOptions.map(opt => React.createElement('option', { key: opt.label, value: opt.rate }, opt.label)))
-                      )
-                    )
+                  // Highlight subOptions for 40(6) with a subtle labeled top border
+                  typeInfo.subOptions && inc.active ? React.createElement('div', { className: "mt-2 pt-2 border-t-2 border-yellow-100" },
+                    React.createElement('div', { className: "inline-block text-xs font-medium text-yellow-700 bg-yellow-50 px-2 py-1 rounded-md border border-yellow-100 mb-2" }, "เลือกอัตราหักค่าใช้จ่าย"),
+                    React.createElement('select', {
+                      className: "mt-0 text-sm border-gray-300 rounded-md shadow-sm focus:border-yellow-300 focus:ring focus:ring-yellow-200 focus:ring-opacity-50 text-gray-600 bg-gray-50",
+                      value: inc.expenseRate,
+                      onChange: (e) => handleIncomeChange(inc.typeId, 'expenseRate', parseFloat(e.target.value))
+                    }, typeInfo.subOptions.map(opt => React.createElement('option', { key: opt.label, value: opt.rate }, opt.label)))
+                  )
                     : React.createElement('p', { className: "text-sm text-gray-500" }, typeInfo.deductionDesc)
                 ),
                 inc.typeId !== 1 && React.createElement('button', { onClick: () => toggleIncomeType(inc.typeId), className: "text-red-400 hover:text-red-600" }, React.createElement(X, { size: 18 }))
@@ -646,13 +613,11 @@
                   className: "w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-right font-mono text-lg",
                   placeholder: "0.00"
                 }),
-                React.createElement('span', { className: "absolute right-4 top-3.5 text-gray-400 text-sm" }, "บาท")
-              ),
-              inc.active && expenseAmount > 0 && (
-                React.createElement('div', { className: "mt-3 flex justify-end" },
-                  React.createElement('div', { className: "bg-blue-50 text-blue-700 px-3 py-1 rounded-md text-sm font-medium border border-blue-100" },
-                    `หักค่าใช้จ่าย: ${expenseAmount.toLocaleString()} บาท`
-                  )
+                React.createElement('span', { className: "absolute right-4 top-3.5 text-gray-400 text-sm" }, "บาท"),
+                // Real-time yearly equivalent when mode is monthly
+                incomeMode === 'monthly' && React.createElement('div', { className: "mt-2 flex justify-end" },
+                  React.createElement('span', { className: "text-xs text-gray-500" }, "เทียบเท่าต่อปี: "),
+                  React.createElement('span', { className: "text-sm font-medium text-gray-700 ml-2" }, ((inc.amount || 0) * 12).toLocaleString() + " บาท")
                 )
               )
             );
@@ -678,49 +643,43 @@
             React.createElement('span', { className: "text-xl font-bold text-blue-900" }, calculateResults.totalExpenses.toLocaleString() + " บาท")
           )
         )
-      );
-    };
+      )
+    );
 
-    const renderDeductionPage = () => {
-      const getCategoryColor = (categoryId) => {
-        switch(categoryId) {
-          case 'personal': return { bg: 'bg-blue-50', text: 'text-blue-800', border: 'border-blue-200' };
-          case 'insurance': return { bg: 'bg-green-50', text: 'text-green-800', border: 'border-green-200' };
-          case 'donation': return { bg: 'bg-purple-50', text: 'text-purple-800', border: 'border-purple-200' };
-          case 'special': return { bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-200' };
-          default: return { bg: 'bg-gray-50', text: 'text-gray-800', border: 'border-gray-200' };
-        }
-      };
-
-      return React.createElement('div', { className: "space-y-6 animate-in slide-in-from-bottom-4 duration-500" },
+    const renderDeductionPage = () => (
+      React.createElement('div', { className: "space-y-6 animate-in slide-in-from-bottom-4 duration-500" },
         React.createElement('h2', { className: "text-2xl font-bold text-gray-800 mb-6" }, "รายการลดหย่อน"),
         DEDUCTION_CATEGORIES.map(category => {
           const items = category.items.filter(item => item.isCommon || showMoreDeductions);
-          const colors = getCategoryColor(category.id);
 
           if (items.length === 0) return null;
 
           return React.createElement('div', { key: category.id, className: "bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm" },
-            React.createElement('div', { 
-              className: `px-4 py-3 border-b ${colors.border} font-bold ${colors.text} flex items-center gap-2` 
-            },
-              React.createElement(category.icon, { size: 18, className: colors.text }),
-              React.createElement('span', null, category.title)
+            // enhanced heading color / subtle gradient to add "สดใส" แต่ยังคงดูเรียบร้อย
+            React.createElement('div', { className: "px-4 py-3 border-b border-gray-200 font-bold text-blue-700 flex items-center gap-2 bg-gradient-to-r from-white via-blue-50 to-cyan-50" },
+              React.createElement(category.icon, { size: 18, className: "text-blue-500" }), category.title
             ),
             React.createElement('div', { className: "p-4 space-y-4" },
-              items.map((item) => React.createElement('div', { key: item.key, className: "flex items-center justify-between gap-4" },
-                React.createElement('div', { className: "flex items-center gap-2 flex-1" },
-                  React.createElement('span', { className: "text-sm text-gray-700" }, item.label),
-                  React.createElement('button', { onClick: () => setModalData({ isOpen: true, title: item.label, content: item.desc }), className: "text-gray-300 hover:text-yellow-500" }, React.createElement(Lightbulb, { size: 14 }))
-                ),
-                React.createElement('input', {
-                  type: "number",
-                  value: deductions[item.key] || '',
-                  onChange: (e) => setDeductions({ ...deductions, [item.key]: parseFloat(e.target.value) || 0 }),
-                  className: "w-32 px-3 py-2 bg-gray-50 border border-gray-200 rounded text-right text-sm focus:ring-1 focus:ring-blue-500 outline-none",
-                  placeholder: "0"
-                })
-              ))
+              items.map((item) => {
+                const currentValue = deductions[item.key] || 0;
+                return React.createElement('div', { key: item.key, className: "flex items-center justify-between gap-4" },
+                  React.createElement('div', { className: "flex items-center gap-2 flex-1" },
+                    React.createElement('span', { className: "text-sm text-gray-700" }, item.label),
+                    React.createElement('button', { onClick: () => setModalData({ isOpen: true, title: item.label, content: item.desc }), className: "text-gray-300 hover:text-yellow-500" }, React.createElement(Lightbulb, { size: 14 }))
+                  ),
+                  // small compact badge showing current numeric value (ไม่ขยายการ์ด)
+                  React.createElement('div', { className: "flex items-center gap-2" },
+                    React.createElement('div', { className: "text-xs px-2 py-1 rounded bg-gray-50 border border-gray-200 text-gray-600 mr-2 min-w-[72px] text-right" }, currentValue > 0 ? currentValue.toLocaleString() + " ฿" : "0 ฿"),
+                    React.createElement('input', {
+                      type: "number",
+                      value: deductions[item.key] || '',
+                      onChange: (e) => setDeductions({ ...deductions, [item.key]: parseFloat(e.target.value) || 0 }),
+                      className: "w-32 px-3 py-2 bg-gray-50 border border-gray-200 rounded text-right text-sm focus:ring-1 focus:ring-blue-500 outline-none",
+                      placeholder: "0"
+                    })
+                  )
+                );
+              })
             )
           );
         }),
@@ -730,13 +689,12 @@
             showMoreDeductions ? 'ซ่อนรายการลดหย่อนที่สำคัญน้อย' : 'แสดงรายการลดหย่อนอื่น ๆ เพิ่มเติม'
           )
         )
-      );
-    };
+      )
+    );
 
     const renderDashboard = () => {
       const {
         totalIncome,
-        totalExpenses,
         netIncome,
         taxPayable,
         baseTaxPayable,
@@ -751,10 +709,9 @@
 
       const taxSaved = Math.max(0, baseTaxPayable - taxPayable);
       const taxSavedPercent = baseTaxPayable > 0 ? (taxSaved / baseTaxPayable) * 100 : 0;
-      
-      // Calculate tax as percentage of assessable income
-      const assessableIncome = totalIncome - totalExpenses;
-      const taxPercentage = assessableIncome > 0 ? (taxPayable / assessableIncome) * 100 : 0;
+
+      // new: tax as % of assessable income (เงินได้พึงประเมิน = netIncome)
+      const taxAsPercentOfAssessable = netIncome > 0 ? (taxPayable / netIncome) * 100 : 0;
 
       return React.createElement('div', { className: "space-y-6 animate-in fade-in duration-500 pb-8" },
         React.createElement('div', { className: "bg-gradient-to-br from-blue-600 to-cyan-500 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden" },
@@ -771,8 +728,11 @@
           ),
           React.createElement('div', { className: "mt-8 pt-6 border-t border-white/20" },
             React.createElement('p', { className: "text-blue-100 text-sm mb-1" }, "ภาษีที่ต้องชำระ (Tax Payable)"),
-            React.createElement('h2', { className: "text-5xl font-bold tracking-tight mb-2" }, taxPayable.toLocaleString(), " ", React.createElement('span', { className: "text-lg font-normal opacity-70" }, "บาท")),
-            React.createElement('p', { className: "text-blue-100 text-sm font-medium" }, `คิดเป็น ${taxPercentage.toFixed(2)}% ของเงินได้พึงประเมิน`)
+            // increased size and added percentage of net income
+            React.createElement('div', { className: "flex items-baseline gap-4" },
+              React.createElement('h2', { className: "text-5xl font-bold tracking-tight" }, taxPayable.toLocaleString(), " ", React.createElement('span', { className: "text-xl font-normal opacity-80" }, "บาท")),
+              React.createElement('span', { className: "text-sm text-blue-100/90" }, `คิดเป็น ${taxAsPercentOfAssessable.toFixed(1)}% ของเงินได้พึงประเมิน`)
+            )
           )
         ),
         React.createElement('div', { className: "grid grid-cols-2 gap-4" },
