@@ -1,781 +1,1081 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Home, Calendar, ListChecks, User, Plus, Search, 
-  ChevronLeft, LogOut, Copy, Check, Filter, 
-  MapPin, Video, Clock, Users, ChevronRight
-} from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, signInAnonymously, onAuthStateChanged, signOut 
-} from 'firebase/auth';
-import { 
-  getFirestore, collection, addDoc, query, where, 
-  onSnapshot, orderBy, doc, updateDoc, deleteDoc, getDocs 
-} from 'firebase/firestore';
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TAX Calculator — Correct Calculation</title>
 
-// --- 1. FIREBASE CONFIGURATION & INIT ---
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-// --- 2. CONSTANTS & MOCK DATA (FROM UPLOADED FILE) ---
-const ROLES = {
-  MASTER: 'Master',
-  ADMIN: 'Admin',
-  TRAINER: 'Trainer'
-};
-
-const TEAMS = {
-  SPECIALIST: 'Training Specialist',
-  MANDATORY: 'Mandatory'
-};
-
-// User Database from the text file
-const SYSTEM_USERS = [
-  { id: 'ttb_yj', name: 'Yannapat Jaruwongpaiboon', nickname: 'Yannapat', role: ROLES.MASTER, team: TEAMS.SPECIALIST, email: 'yannapat.prudential@gmail.com' },
-  { id: 'ttb_ac', name: 'Ananya Chantaraman', nickname: 'Ananya', role: ROLES.ADMIN, team: null, email: 'Ananyacha10@gmail.com' },
-  { id: 'ttb_sp', name: 'Supaporn Plapblee', nickname: 'Supaporn', role: ROLES.ADMIN, team: null, email: 'jibjib1981.SP@gmail.com' },
-  { id: 'ttb_tt', name: 'Thanayot Thiamsawat', nickname: 'Bank', role: ROLES.TRAINER, team: TEAMS.SPECIALIST, email: 'thanayot.calendar@gmail.com' },
-  { id: 'ttb_pp', name: 'Pachara Phattaratrirakul', nickname: 'Pachara', role: ROLES.TRAINER, team: TEAMS.SPECIALIST, email: 'greatkaloo@gmail.com' },
-  { id: 'ttb_wc', name: 'Wattanapan Chaipool', nickname: 'Wattanapan', role: ROLES.TRAINER, team: TEAMS.SPECIALIST, email: 'wattanapan.ch@gmail.com' },
-  { id: 'ttb_as', name: 'Arthaphan Suwanpraditt', nickname: 'Arthaphan', role: ROLES.TRAINER, team: TEAMS.SPECIALIST, email: 'arthaphs@gmail.com' },
-  { id: 'ttb_nj', name: 'Natkanit Jariyadilok', nickname: 'Natkanit', role: ROLES.TRAINER, team: TEAMS.SPECIALIST, email: 'natkanitjariyadilok@gmail.com' },
-  { id: 'ttb_ap', name: 'Alangkorn Pooim', nickname: 'Alangkorn', role: ROLES.TRAINER, team: TEAMS.MANDATORY, email: 'korn.ak28@gmail.com' },
-  { id: 'ttb_np', name: 'Nantida Pinhirun', nickname: 'Nantida', role: ROLES.TRAINER, team: TEAMS.MANDATORY, email: 'nantidapin6395@gmail.com' },
-  { id: 'ttb_pn', name: 'Patchareeya Nopwinyuwong', nickname: 'Patchareeya', role: ROLES.TRAINER, team: TEAMS.MANDATORY, email: 'patchareeya.n0412@gmail.com' },
-  { id: 'ttb_sd', name: 'Suksawad Ditsumrueng', nickname: 'Suksawad', role: ROLES.TRAINER, team: TEAMS.MANDATORY, email: 'Wad008.dd@gmail.com' },
-  { id: 'ttb_sk', name: 'Supat Koonkitti', nickname: 'Supat', role: ROLES.TRAINER, team: TEAMS.MANDATORY, email: 'Supat.koonkitti@gmail.com' },
-];
-
-const PARTNERS = ['ttb', 'PD', 'TTT', 'PRU', 'Other'];
-const METHODS = ['F2F', 'Online'];
-
-// --- 3. HELPER FUNCTIONS ---
-const formatDate = (date) => {
-  const d = new Date(date);
-  return d.toISOString().split('T')[0];
-};
-
-const getTomorrowDate = () => {
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return formatDate(tomorrow);
-};
-
-const getThaiDateString = (dateStr) => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('th-TH', { 
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' 
-  });
-};
-
-// --- 4. MAIN COMPONENT ---
-export default function App() {
-  const [firebaseUser, setFirebaseUser] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null); // App user logic
-  const [activeTab, setActiveTab] = useState('home');
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  // --- AUTH & INITIALIZATION ---
-  useEffect(() => {
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-      // Check if we have a persisted session in localStorage for our App User
-      const storedUserId = localStorage.getItem('ttb_app_user_id');
-      if (storedUserId) {
-        const foundUser = SYSTEM_USERS.find(u => u.id === storedUserId);
-        if (foundUser) setCurrentUser(foundUser);
-      }
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // --- DATA FETCHING (REALTIME) ---
-  useEffect(() => {
-    if (!firebaseUser) return;
+  <style>
+    :root{
+      --bg:#f8fafc; --card:#ffffff; --muted:#6b7280;
+      --before:#3b82f6; --after:#10b981; --accent:#f59e0b;
+    }
+    html,body,#root { height: 100%; }
+    body { 
+      -webkit-font-smoothing:antialiased; 
+      -moz-osx-font-smoothing:grayscale; 
+      background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color:#0f172a; 
+      font-family:'Inter','Segoe UI',system-ui,Arial,sans-serif;
+    }
     
-    // Fetch ALL tasks (Public Data Rule)
-    // We filter sensitive data in UI based on roles, but fetch all for Availability check
-    const q = query(
-      collection(db, 'artifacts', appId, 'public', 'data', 'tasks'),
-      orderBy('date', 'asc'),
-      orderBy('startTime', 'asc')
+    .card { 
+      background: white; 
+      border-radius: 20px; 
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08); 
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .card:hover { 
+      transform: translateY(-5px); 
+      box-shadow: 0 15px 40px rgba(0,0,0,0.12);
+    }
+    
+    .gradient-text { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .tab-active { 
+      background: white; 
+      color: #667eea; 
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2); 
+      border-radius: 12px;
+    }
+    
+    .credit-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 20px;
+      color: white;
+      position: relative;
+      overflow: hidden;
+    }
+    .credit-card::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
+    }
+  </style>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#667eea',
+            secondary: '#764ba2',
+          },
+          fontFamily: {
+            sans: ['Inter', 'Segoe UI', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    }
+  </script>
+</head>
+<body class="antialiased">
+
+  <div id="root"></div>
+
+  <script type="module">
+  import React, { useState, useMemo } from "https://esm.sh/react@18.2.0";
+  import { createRoot } from "https://esm.sh/react-dom@18.2.0/client";
+  import {
+    Calculator, PieChart, Sliders, BookOpen, Menu, X, ChevronDown,
+    Plus, Info, Lightbulb, ShieldCheck, Activity, HeartPulse,
+    Umbrella, Coins, TrendingUp, CheckCircle, Home, Users, Gift, DownloadCloud,
+    TrendingDown, CreditCard, DollarSign, FileText, BarChart3, Wallet,
+    Send, MessageSquare, Briefcase, AlertCircle
+  } from "https://esm.sh/lucide-react@0.309.0";
+
+  /***** ข้อมูลเงินได้ตามมาตรา 40 แก้ไขให้ถูกต้อง *****/
+  const INCOME_TYPES = [
+    { 
+      id: 1, 
+      name: '40(1) เงินเดือน/ค่าจ้าง', 
+      desc: 'เงินเดือน ค่าจ้าง ค่าตอบแทน โบนัส บำเหน็จ บำนาญ', 
+      deductionDesc: 'หักค่าใช้จ่าย 50% ไม่เกิน 100,000 บาท', 
+      defaultRate: 0.5, 
+      hasFixedCap: true,
+      maxCap: 100000,
+      section: '40(1)',
+      note: 'หักค่าลดหย่อนส่วนบุคคล 60,000 บาทได้เพิ่ม'
+    },
+    { 
+      id: 2, 
+      name: '40(2) ค่าจ้างทำของ/รับเหมา', 
+      desc: 'ค่าจ้างทำของ ค่าจ้างรับเหมา ค่านายหน้า ค่าคอมมิชชั่น', 
+      deductionDesc: 'หักค่าใช้จ่าย 60% หรือตามจริง (เลือกได้)', 
+      defaultRate: 0.6, 
+      hasFixedCap: false,
+      section: '40(2)',
+      note: 'เลือกหักตามจริงหรือเหมา 60%'
+    },
+    { 
+      id: 3, 
+      name: '40(3) ค่าลิขสิทธิ์', 
+      desc: 'ค่าลิขสิทธิ์ ค่าแห่งสิทธิ์ ค่าดำเนินงาน', 
+      deductionDesc: 'หักค่าใช้จ่าย 50% หรือตามจริง (เลือกได้)', 
+      defaultRate: 0.5, 
+      hasFixedCap: false,
+      section: '40(3)',
+      note: 'เลือกหักตามจริงหรือเหมา 50%'
+    },
+    { 
+      id: 4, 
+      name: '40(4) ดอกเบี้ย/เงินปันผล', 
+      desc: 'ดอกเบี้ย เงินปันผล เงินส่วนแบ่งกำไร', 
+      deductionDesc: 'ภาษีหัก ณ ที่จ่าย (Final Tax) ส่วนใหญ่ไม่นำมารวม', 
+      defaultRate: 0, 
+      hasFixedCap: false,
+      section: '40(4)',
+      note: 'Final Tax (10%) ไม่นำมารวมคำนวณภาษี'
+    },
+    { 
+      id: 5, 
+      name: '40(5) ค่าเช่าทรัพย์สิน', 
+      desc: 'ค่าเช่าอสังหาริมทรัพย์, รถยนต์, เรือ, เครื่องจักร', 
+      deductionDesc: 'หักค่าใช้จ่าย 10-30% ตามประเภททรัพย์สิน', 
+      defaultRate: 0.3, 
+      hasFixedCap: false,
+      subOptions: [
+        { label: 'อสังหาริมทรัพย์ (30%)', rate: 0.3 },
+        { label: 'เรือ/เครื่องบิน (20%)', rate: 0.2 },
+        { label: 'รถยนต์/เครื่องจักร (10%)', rate: 0.1 }
+      ],
+      section: '40(5)',
+      note: 'หักตามจริงหรือเหมาตามประเภททรัพย์สิน'
+    },
+    {
+      id: 6,
+      name: '40(6) วิชาชีพอิสระ',
+      desc: 'ประกอบโรคศิลปะ, กฎหมาย, วิศวกรรม, สถาปัตยกรรม, บัญชี, ประเมินค่าทรัพย์สิน',
+      deductionDesc: 'เลือกหักค่าใช้จ่ายเหมา 30% หรือ 60% ตามวิชาชีพ',
+      defaultRate: 0.3,
+      hasFixedCap: false,
+      subOptions: [
+        { label: 'แพทย์/ประกอบโรคศิลปะ (60%)', rate: 0.6 },
+        { label: 'กฎหมาย/วิศวกร/สถาปัตย์/บัญชี (30%)', rate: 0.3 }
+      ],
+      section: '40(6)',
+      note: 'หักตามจริงหรือเหมาตามวิชาชีพ'
+    },
+    { 
+      id: 7, 
+      name: '40(7) รับเหมาก่อสร้าง', 
+      desc: 'รับเหมาก่อสร้างทั้งค่าแรงและค่าวัสดุ', 
+      deductionDesc: 'หักค่าใช้จ่าย 60% หรือตามจริง (เลือกได้)', 
+      defaultRate: 0.6, 
+      hasFixedCap: false,
+      section: '40(7)',
+      note: 'เลือกหักตามจริงหรือเหมา 60%'
+    },
+    { 
+      id: 8, 
+      name: '40(8) ธุรกิจ/พาณิชย์', 
+      desc: 'ขายของออนไลน์, ค้าขาย, ธุรกิจบริการ, เกษตรกรรม', 
+      deductionDesc: 'หักค่าใช้จ่ายตามจริงหรือเหมา 40-85%', 
+      defaultRate: 0.6, 
+      hasFixedCap: false,
+      subOptions: [
+        { label: 'ขายส่ง-ขายปลีก (85%)', rate: 0.85 },
+        { label: 'ธุรกิจบริการ (60%)', rate: 0.6 },
+        { label: 'เกษตรกรรม (40%)', rate: 0.4 },
+        { label: 'อื่นๆ (60%)', rate: 0.6 }
+      ],
+      section: '40(8)',
+      note: 'เลือกหักตามจริงหรือเหมาตามประเภทธุรกิจ'
+    },
+  ];
+
+  /***** อัตราภาษีเงินได้บุคคลธรรมดา 2566 *****/
+  const TAX_BRACKETS_2023 = [
+    { min: 0, max: 150000, rate: 0.00, tax: 0 },
+    { min: 150000, max: 300000, rate: 0.05, tax: 7500 },
+    { min: 300000, max: 500000, rate: 0.10, tax: 20000 },
+    { min: 500000, max: 750000, rate: 0.15, tax: 37500 },
+    { min: 750000, max: 1000000, rate: 0.20, tax: 50000 },
+    { min: 1000000, max: 2000000, rate: 0.25, tax: 250000 },
+    { min: 2000000, max: 5000000, rate: 0.30, tax: 900000 },
+    { min: 5000000, max: Infinity, rate: 0.35, tax: 0 },
+  ];
+
+  /***** รายการลดหย่อนภาษีตามกฎหมาย 2566 *****/
+  const DEDUCTION_CATEGORIES = [
+    {
+      id: 'personal',
+      title: '1. ส่วนบุคคลและครอบครัว',
+      icon: Users,
+      items: [
+        { 
+          key: 'personal', 
+          label: 'ส่วนตัว (60,000 บาท)', 
+          desc: 'ลดหย่อนส่วนบุคคลทุกคน 60,000 บาท (หักอัตโนมัติ)', 
+          max: 60000, 
+          isCommon: true,
+          fixed: true,
+          section: '47(1)'
+        },
+        { 
+          key: 'spouse', 
+          label: 'คู่สมรส (ไม่มีเงินได้)', 
+          desc: 'คู่สมรสที่ไม่มีเงินได้ หักได้ 60,000 บาท', 
+          max: 60000, 
+          isCommon: true,
+          fixed: false,
+          section: '47(2)'
+        },
+        { 
+          key: 'child', 
+          label: 'บุตร (คนละ 30,000 บาท)', 
+          desc: 'บุตรที่ชอบด้วยกฎหมายและบุตรบุญธรรม (อายุไม่เกิน 25 ปี หรือพิการ)', 
+          max: null, 
+          isCommon: true,
+          fixed: false,
+          perItem: 30000,
+          section: '47(3)'
+        },
+        { 
+          key: 'parent', 
+          label: 'ค่าเลี้ยงดูพ่อ-แม่ (คนละ 30,000 บาท)', 
+          desc: 'บิดา-มารดา (อายุ 60 ปีขึ้นไป หรือพิการ)', 
+          max: null, 
+          isCommon: true,
+          fixed: false,
+          perItem: 30000,
+          section: '47(4)'
+        },
+        { 
+          key: 'disabledSupporter', 
+          label: 'อุปการะผู้พิการ/ทุพพลภาพ', 
+          desc: 'หักได้ 60,000 บาทต่อคน (มีเงื่อนไขพิเศษ)', 
+          max: null, 
+          isCommon: false,
+          fixed: false,
+          perItem: 60000,
+          section: '47(5)'
+        },
+      ]
+    },
+    {
+      id: 'insurance',
+      title: '2. ประกันชีวิต/สุขภาพ/บำนาญ',
+      icon: ShieldCheck,
+      items: [
+        { 
+          key: 'lifeInsurance', 
+          label: 'ประกันชีวิตทั่วไป', 
+          desc: 'เบี้ยประกันชีวิต หักได้ไม่เกิน 100,000 บาท (รวมกับประกันสุขภาพ)', 
+          max: 100000, 
+          isCommon: true,
+          fixed: false,
+          group: 'insurance_100k',
+          section: '47(6)'
+        },
+        { 
+          key: 'healthInsurance', 
+          label: 'ประกันสุขภาพ (ตัวเอง)', 
+          desc: 'เบี้ยประกันสุขภาพตัวเอง หักได้ไม่เกิน 25,000 บาท (รวมในวงเงิน 100,000 บาทกับประกันชีวิต)', 
+          max: 25000, 
+          isCommon: true,
+          fixed: false,
+          group: 'insurance_100k',
+          section: '47(6)'
+        },
+        { 
+          key: 'pensionInsurance', 
+          label: 'ประกันบำนาญ', 
+          desc: 'เบี้ยประกันบำนาญ หักได้ 15% ของเงินได้ ไม่เกิน 200,000 บาท', 
+          max: 200000, 
+          isCommon: true,
+          fixed: false,
+          percentOfIncome: 0.15,
+          section: '47(7)'
+        },
+        { 
+          key: 'healthInsuranceParent', 
+          label: 'ประกันสุขภาพ (พ่อแม่)', 
+          desc: 'เบี้ยประกันสุขภาพพ่อแม่ หักได้คนละไม่เกิน 15,000 บาท', 
+          max: 15000, 
+          isCommon: false,
+          fixed: false,
+          perItem: 15000,
+          section: '47(6)'
+        },
+      ]
+    },
+    {
+      id: 'investment',
+      title: '3. การออม/การลงทุน',
+      icon: TrendingUp,
+      items: [
+        { 
+          key: 'rmf', 
+          label: 'กองทุน RMF', 
+          desc: 'เงินลงทุนใน RMF หักได้ 30% ของเงินได้ ไม่เกิน 500,000 บาท', 
+          max: 500000, 
+          isCommon: true,
+          fixed: false,
+          percentOfIncome: 0.30,
+          group: 'investment_500k',
+          section: '47(8)'
+        },
+        { 
+          key: 'ssf', 
+          label: 'กองทุน SSF', 
+          desc: 'เงินลงทุนใน SSF หักได้ 30% ของเงินได้ ไม่เกิน 200,000 บาท', 
+          max: 200000, 
+          isCommon: true,
+          fixed: false,
+          percentOfIncome: 0.30,
+          group: 'investment_500k',
+          section: '47(9)'
+        },
+        { 
+          key: 'providentFund', 
+          label: 'กองทุนสำรองเลี้ยงชีพ', 
+          desc: 'เงินสะสมกองทุนสำรองเลี้ยงชีพ หักได้ 15% ของเงินเดือน ไม่เกิน 500,000 บาท', 
+          max: 500000, 
+          isCommon: true,
+          fixed: false,
+          percentOfIncome: 0.15,
+          group: 'investment_500k',
+          section: '47(10)'
+        },
+        { 
+          key: 'thaiesg', 
+          label: 'กองทุน ThaiESG', 
+          desc: 'หักได้ไม่เกิน 100,000 บาท (มีเงื่อนไข)', 
+          max: 100000, 
+          isCommon: false,
+          fixed: false,
+          section: '47(11)'
+        },
+      ]
+    },
+    {
+      id: 'donation',
+      title: '4. เงินบริจาค',
+      icon: Gift,
+      items: [
+        { 
+          key: 'generalDonation', 
+          label: 'บริจาคทั่วไป', 
+          desc: 'หักได้ไม่เกิน 10% ของเงินได้หลังหักค่าลดหย่อนอื่น', 
+          max: null, 
+          isCommon: true,
+          fixed: false,
+          percentOfNetIncome: 0.10,
+          section: '47(12)'
+        },
+        { 
+          key: 'educationDonation', 
+          label: 'บริจาคการศึกษา/สาธารณสุข (2 เท่า)', 
+          desc: 'หักได้ 2 เท่า ไม่เกิน 10% ของเงินได้หลังหักค่าลดหย่อนอื่น', 
+          max: null, 
+          isCommon: false,
+          fixed: false,
+          multiplier: 2,
+          percentOfNetIncome: 0.10,
+          section: '47(13)'
+        },
+        { 
+          key: 'politicalDonation', 
+          label: 'บริจาคพรรคการเมือง', 
+          desc: 'หักได้ไม่เกิน 5,000 บาท', 
+          max: 5000, 
+          isCommon: false,
+          fixed: false,
+          section: '47(14)'
+        },
+      ]
+    },
+    {
+      id: 'other',
+      title: '5. สิทธิประโยชน์อื่นๆ',
+      icon: Home,
+      items: [
+        { 
+          key: 'mortgageInterest', 
+          label: 'ดอกเบี้ยสินเชื่อบ้าน', 
+          desc: 'ดอกเบี้ยบ้านหลังแรก หักได้ไม่เกิน 100,000 บาท', 
+          max: 100000, 
+          isCommon: true,
+          fixed: false,
+          section: '47(15)'
+        },
+        { 
+          key: 'socialSecurity', 
+          label: 'เงินสมทบประกันสังคม', 
+          desc: 'หักตามที่จ่ายจริง สูงสุด 9,000 บาท', 
+          max: 9000, 
+          isCommon: true,
+          fixed: false,
+          section: '47(16)'
+        },
+        { 
+          key: 'childBirth', 
+          label: 'ค่าฝากครรภ์/คลอดบุตร', 
+          desc: 'หักตามที่จ่ายจริง สูงสุด 60,000 บาท', 
+          max: 60000, 
+          isCommon: false,
+          fixed: false,
+          section: '47(17)'
+        },
+      ]
+    },
+  ];
+
+  /***** ฟังก์ชันคำนวณภาษีที่ถูกต้อง *****/
+  const calculateTax = (taxableIncome) => {
+    let remainingIncome = taxableIncome;
+    let totalTax = 0;
+    
+    for (let i = TAX_BRACKETS_2023.length - 1; i >= 0; i--) {
+      const bracket = TAX_BRACKETS_2023[i];
+      
+      if (remainingIncome > bracket.min) {
+        const incomeInBracket = Math.min(remainingIncome, bracket.max) - bracket.min;
+        const taxInBracket = incomeInBracket * bracket.rate;
+        totalTax += taxInBracket;
+        remainingIncome = bracket.min;
+      }
+    }
+    
+    return Math.max(0, totalTax);
+  };
+
+  /***** ฟังก์ชันคำนวณค่าใช้จ่ายตามมาตรา 40 *****/
+  const calculateExpenses = (incomeType, amount, expenseRate) => {
+    const typeInfo = INCOME_TYPES.find(t => t.id === incomeType);
+    
+    if (!typeInfo) return 0;
+    
+    if (typeInfo.hasFixedCap && typeInfo.maxCap) {
+      // สำหรับ 40(1) และ 40(2) ที่หักรวมกันไม่เกิน 100,000 บาท
+      return Math.min(amount * expenseRate, typeInfo.maxCap);
+    }
+    
+    // สำหรับประเภทอื่นๆ หักตามอัตราที่กำหนด
+    return amount * expenseRate;
+  };
+
+  /***** Component สำหรับแสดงแจ้งเตือนข้อผิดพลาด *****/
+  const ValidationAlert = ({ message, type = 'warning' }) => {
+    const colors = {
+      warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+      error: 'bg-red-50 border-red-200 text-red-800',
+      info: 'bg-blue-50 border-blue-200 text-blue-800',
+      success: 'bg-green-50 border-green-200 text-green-800',
+    };
+    
+    return (
+      React.createElement('div', { className: `p-4 rounded-xl border ${colors[type]} flex items-start gap-3 mb-4` },
+        React.createElement(AlertCircle, { className: `w-5 h-5 mt-0.5 ${type === 'warning' ? 'text-yellow-600' : type === 'error' ? 'text-red-600' : type === 'info' ? 'text-blue-600' : 'text-green-600'}` }),
+        React.createElement('div', { className: "flex-1" },
+          React.createElement('p', { className: "text-sm font-medium" }, message)
+        )
+      )
     );
+  };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const tasksData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setTasks(tasksData);
-    }, (error) => {
-      console.error("Error fetching tasks:", error);
+  /***** Component สำหรับแสดงบัตรยอดคงเหลือ *****/
+  const BalanceCard = ({ netIncome, taxPayable, totalIncome }) => {
+    return (
+      React.createElement('div', { className: "credit-card p-6 relative overflow-hidden" },
+        React.createElement('div', { className: "relative z-10" },
+          React.createElement('div', { className: "flex justify-between items-start mb-8" },
+            React.createElement('div', null,
+              React.createElement('p', { className: "text-white/80 text-sm" }, "Tax Calculator 2566"),
+              React.createElement('h2', { className: "text-2xl font-bold text-white" }, "คำนวณภาษีเงินได้บุคคลธรรมดา")
+            ),
+            React.createElement(Calculator, { size: 32, className: "text-white/80" })
+          ),
+          React.createElement('div', { className: "mb-6" },
+            React.createElement('p', { className: "text-white/80 text-sm mb-1" }, "รายได้สุทธิ (หลังหักค่าใช้จ่ายและลดหย่อน)" },
+            React.createElement('h1', { className: "text-4xl font-bold text-white" }, 
+              netIncome.toLocaleString() + " ฿"
+            )
+          ),
+          React.createElement('div', { className: "grid grid-cols-2 gap-4" },
+            React.createElement('div', null,
+              React.createElement('p', { className: "text-white/80 text-xs mb-1" }, "รายได้รวม" },
+              React.createElement('p', { className: "text-lg font-semibold text-white" }, totalIncome.toLocaleString() + " ฿")
+            ),
+            React.createElement('div', null,
+              React.createElement('p', { className: "text-white/80 text-xs mb-1" }, "ภาษีต้องชำระ" },
+              React.createElement('p', { className: "text-lg font-semibold text-white" }, taxPayable.toLocaleString() + " ฿")
+            )
+          )
+        )
+      )
+    );
+  };
+
+  /***** Main App Component *****/
+  function App() {
+    const [activeTab, setActiveTab] = useState('income');
+    const [incomeMode, setIncomeMode] = useState('yearly');
+    
+    // รายได้แต่ละประเภท
+    const [incomes, setIncomes] = useState([
+      { typeId: 1, amount: 300000, active: true, expenseRate: 0.5 },
+      { typeId: 2, amount: 0, active: false, expenseRate: 0.6 },
+      { typeId: 3, amount: 0, active: false, expenseRate: 0.5 },
+      { typeId: 4, amount: 0, active: false, expenseRate: 0 },
+      { typeId: 5, amount: 0, active: false, expenseRate: 0.3 },
+      { typeId: 6, amount: 0, active: false, expenseRate: 0.3 },
+      { typeId: 7, amount: 0, active: false, expenseRate: 0.6 },
+      { typeId: 8, amount: 0, active: false, expenseRate: 0.6 },
+    ]);
+    
+    // ข้อมูลลดหย่อน
+    const [deductions, setDeductions] = useState({
+      personal: 60000, // หักอัตโนมัติ
+      spouse: 0,
+      child: 0,
+      parent: 0,
+      disabledSupporter: 0,
+      lifeInsurance: 0,
+      healthInsurance: 0,
+      pensionInsurance: 0,
+      healthInsuranceParent: 0,
+      rmf: 0,
+      ssf: 0,
+      providentFund: 0,
+      thaiesg: 0,
+      generalDonation: 0,
+      educationDonation: 0,
+      politicalDonation: 0,
+      mortgageInterest: 0,
+      socialSecurity: 0,
+      childBirth: 0,
     });
+    
+    const [errors, setErrors] = useState([]);
 
-    return () => unsubscribe();
-  }, [firebaseUser]);
-
-  // --- ACTIONS ---
-  const handleLogin = (userIdInput) => {
-    const user = SYSTEM_USERS.find(u => u.id.toLowerCase() === userIdInput.toLowerCase());
-    if (user) {
-      setCurrentUser(user);
-      localStorage.setItem('ttb_app_user_id', user.id);
-      setActiveTab('home');
-    } else {
-      alert('User ID ไม่ถูกต้อง (ลองใช้: ttb_yj หรือ ttb_tt)');
-    }
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    localStorage.removeItem('ttb_app_user_id');
-    setActiveTab('home');
-  };
-
-  const addTask = async (taskData) => {
-    if (!firebaseUser) return;
-    try {
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), {
-        ...taskData,
-        createdAt: new Date().toISOString(),
-        createdBy: currentUser.id
+    /***** คำนวณผลลัพธ์ *****/
+    const calculateResults = useMemo(() => {
+      setErrors([]);
+      
+      // คำนวณรายได้รวม
+      const totalIncome = incomes
+        .filter(inc => inc.active)
+        .reduce((sum, inc) => {
+          const amount = incomeMode === 'monthly' ? inc.amount * 12 : inc.amount;
+          return sum + (amount || 0);
+        }, 0);
+      
+      // คำนวณค่าใช้จ่ายตามมาตรา 40
+      let totalExpenses = 0;
+      const expensesDetail = [];
+      
+      // ตรวจสอบ 40(1) และ 40(2) ที่หักรวมกันไม่เกิน 100,000 บาท
+      const type1 = incomes.find(inc => inc.typeId === 1);
+      const type2 = incomes.find(inc => inc.typeId === 2);
+      
+      if (type1?.active || type2?.active) {
+        const inc1Amount = incomeMode === 'monthly' ? (type1?.amount || 0) * 12 : (type1?.amount || 0);
+        const inc2Amount = incomeMode === 'monthly' ? (type2?.amount || 0) * 12 : (type2?.amount || 0);
+        const combinedExpense = (inc1Amount + inc2Amount) * 0.5;
+        const expense = Math.min(combinedExpense, 100000);
+        totalExpenses += expense;
+        
+        if (type1?.active) {
+          expensesDetail.push({ type: '40(1)', amount: expense * (inc1Amount / (inc1Amount + inc2Amount)) });
+        }
+        if (type2?.active) {
+          expensesDetail.push({ type: '40(2)', amount: expense * (inc2Amount / (inc1Amount + inc2Amount)) });
+        }
+      }
+      
+      // คำนวณค่าใช้จ่ายประเภทอื่นๆ
+      incomes.filter(inc => inc.active && inc.typeId > 2).forEach(inc => {
+        const amount = incomeMode === 'monthly' ? inc.amount * 12 : inc.amount;
+        const expense = amount * inc.expenseRate;
+        totalExpenses += expense;
+        const typeInfo = INCOME_TYPES.find(t => t.id === inc.typeId);
+        expensesDetail.push({ type: typeInfo?.section, amount: expense });
       });
-      return true;
-    } catch (e) {
-      console.error("Error adding task: ", e);
-      return false;
-    }
-  };
+      
+      // คำนวณเงินได้สุทธิก่อนลดหย่อน
+      const incomeBeforeDeductions = Math.max(0, totalIncome - totalExpenses);
+      
+      /***** คำนวณลดหย่อน *****/
+      let totalDeductions = 0;
+      const deductionsDetail = [];
+      
+      // 1. ส่วนบุคคลและครอบครัว
+      totalDeductions += 60000; // ส่วนตัวอัตโนมัติ
+      deductionsDetail.push({ category: 'ส่วนตัว', amount: 60000 });
+      
+      if (deductions.spouse > 0) {
+        const spouseDeduction = Math.min(deductions.spouse * 60000, 60000);
+        totalDeductions += spouseDeduction;
+        deductionsDetail.push({ category: 'คู่สมรส', amount: spouseDeduction });
+      }
+      
+      if (deductions.child > 0) {
+        const childDeduction = deductions.child * 30000;
+        totalDeductions += childDeduction;
+        deductionsDetail.push({ category: 'บุตร', amount: childDeduction });
+      }
+      
+      if (deductions.parent > 0) {
+        const parentDeduction = deductions.parent * 30000;
+        totalDeductions += parentDeduction;
+        deductionsDetail.push({ category: 'พ่อแม่', amount: parentDeduction });
+      }
+      
+      if (deductions.disabledSupporter > 0) {
+        const disabledDeduction = deductions.disabledSupporter * 60000;
+        totalDeductions += disabledDeduction;
+        deductionsDetail.push({ category: 'ผู้พิการ', amount: disabledDeduction });
+      }
+      
+      // 2. ประกันชีวิต/สุขภาพ (รวมกันไม่เกิน 100,000 บาท)
+      const lifeInsurance = Math.min(deductions.lifeInsurance, 100000);
+      const healthInsurance = Math.min(deductions.healthInsurance, 25000);
+      const insuranceTotal = Math.min(lifeInsurance + healthInsurance, 100000);
+      totalDeductions += insuranceTotal;
+      deductionsDetail.push({ category: 'ประกันชีวิต/สุขภาพ', amount: insuranceTotal });
+      
+      // ตรวจสอบเกินเพดาน
+      if (lifeInsurance + healthInsurance > 100000) {
+        setErrors(prev => [...prev, 'เบี้ยประกันชีวิต+สุขภาพรวมเกิน 100,000 บาท จะหักได้ไม่เกิน 100,000 บาท']);
+      }
+      
+      // 3. ประกันบำนาญ (15% ของรายได้ ไม่เกิน 200,000 บาท)
+      const pensionMax = Math.min(totalIncome * 0.15, 200000);
+      const pensionInsurance = Math.min(deductions.pensionInsurance, pensionMax);
+      totalDeductions += pensionInsurance;
+      deductionsDetail.push({ category: 'ประกันบำนาญ', amount: pensionInsurance });
+      
+      // 4. ประกันสุขภาพพ่อแม่
+      const healthInsuranceParent = Math.min(deductions.healthInsuranceParent, 15000);
+      totalDeductions += healthInsuranceParent;
+      if (healthInsuranceParent > 0) {
+        deductionsDetail.push({ category: 'ประกันสุขภาพพ่อแม่', amount: healthInsuranceParent });
+      }
+      
+      // 5. การลงทุน (RMF, SSF, PVD รวมกันไม่เกิน 500,000 บาท)
+      const rmfMax = Math.min(totalIncome * 0.30, 500000);
+      const ssfMax = Math.min(totalIncome * 0.30, 200000);
+      const pvdMax = Math.min(totalIncome * 0.15, 500000);
+      
+      const rmf = Math.min(deductions.rmf, rmfMax);
+      const ssf = Math.min(deductions.ssf, ssfMax);
+      const providentFund = Math.min(deductions.providentFund, pvdMax);
+      
+      const investmentTotal = Math.min(rmf + ssf + providentFund, 500000);
+      totalDeductions += investmentTotal;
+      deductionsDetail.push({ category: 'การลงทุน (RMF/SSF/PVD)', amount: investmentTotal });
+      
+      // 6. ThaiESG
+      const thaiesg = Math.min(deductions.thaiesg, 100000);
+      totalDeductions += thaiesg;
+      if (thaiesg > 0) {
+        deductionsDetail.push({ category: 'ThaiESG', amount: thaiesg });
+      }
+      
+      // 7. เงินบริจาค (คำนวณหลังหักลดหย่อนอื่น)
+      const netIncomeBeforeDonation = Math.max(0, incomeBeforeDeductions - totalDeductions);
+      const donationLimit = netIncomeBeforeDonation * 0.10;
+      
+      const generalDonation = Math.min(deductions.generalDonation, donationLimit);
+      const educationDonation = Math.min(deductions.educationDonation * 2, donationLimit);
+      const politicalDonation = Math.min(deductions.politicalDonation, 5000);
+      
+      const totalDonation = generalDonation + educationDonation + politicalDonation;
+      const actualDonation = Math.min(totalDonation, donationLimit);
+      
+      totalDeductions += actualDonation;
+      if (actualDonation > 0) {
+        deductionsDetail.push({ category: 'เงินบริจาค', amount: actualDonation });
+      }
+      
+      // 8. สิทธิประโยชน์อื่นๆ
+      const mortgageInterest = Math.min(deductions.mortgageInterest, 100000);
+      const socialSecurity = Math.min(deductions.socialSecurity, 9000);
+      const childBirth = Math.min(deductions.childBirth, 60000);
+      
+      totalDeductions += mortgageInterest + socialSecurity + childBirth;
+      
+      if (mortgageInterest > 0) deductionsDetail.push({ category: 'ดอกเบี้ยบ้าน', amount: mortgageInterest });
+      if (socialSecurity > 0) deductionsDetail.push({ category: 'ประกันสังคม', amount: socialSecurity });
+      if (childBirth > 0) deductionsDetail.push({ category: 'คลอดบุตร', amount: childBirth });
+      
+      /***** คำนวณเงินได้สุทธิและภาษี *****/
+      const netIncome = Math.max(0, incomeBeforeDeductions - totalDeductions);
+      const taxPayable = calculateTax(netIncome);
+      
+      /***** ตรวจสอบข้อผิดพลาดทั่วไป *****/
+      if (totalIncome > 0 && netIncome < 0) {
+        setErrors(prev => [...prev, 'ค่าลดหย่อนเกินจำนวนเงินได้ กรุณาตรวจสอบข้อมูล']);
+      }
+      
+      return {
+        totalIncome,
+        totalExpenses,
+        expensesDetail,
+        incomeBeforeDeductions,
+        totalDeductions,
+        deductionsDetail,
+        netIncome,
+        taxPayable,
+        errors
+      };
+    }, [incomes, deductions, incomeMode]);
 
-  const deleteTask = async (taskId) => {
-    if (!confirm('ยืนยันการลบตารางงาน?')) return;
-    try {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', taskId));
-    } catch (e) {
-      console.error("Error deleting task: ", e);
-    }
-  };
+    /***** หน้าจอแสดงรายได้ *****/
+    const renderIncomePage = () => {
+      return (
+        React.createElement('div', { className: "space-y-6" },
+          errors.length > 0 && errors.map((error, index) => (
+            React.createElement(ValidationAlert, { key: index, message: error, type: 'warning' })
+          )),
+          
+          React.createElement('div', { className: "card p-6" },
+            React.createElement('div', { className: "flex justify-between items-center mb-6" },
+              React.createElement('h2', { className: "text-xl font-bold text-gray-800" }, "รายได้ตามมาตรา 40" },
+              React.createElement('div', { className: "flex bg-gray-100 p-1 rounded-lg" },
+                ['yearly', 'monthly'].map(mode => (
+                  React.createElement('button', {
+                    key: mode,
+                    onClick: () => setIncomeMode(mode),
+                    className: `px-4 py-2 rounded-md ${incomeMode === mode ? 'bg-white shadow text-primary' : 'text-gray-600'}`,
+                  }, mode === 'monthly' ? 'รายเดือน' : 'รายปี')
+                ))
+              )
+            ),
+            
+            React.createElement('div', { className: "space-y-4" },
+              incomes.filter(inc => inc.active).map((inc) => {
+                const typeInfo = INCOME_TYPES.find(t => t.id === inc.typeId);
+                return (
+                  React.createElement('div', { key: inc.typeId, className: "border border-gray-200 rounded-xl p-4" },
+                    React.createElement('div', { className: "flex justify-between items-start mb-3" },
+                      React.createElement('div', null,
+                        React.createElement('h3', { className: "font-semibold text-gray-800" }, typeInfo.name),
+                        React.createElement('p', { className: "text-sm text-gray-500" }, typeInfo.deductionDesc)
+                      ),
+                      inc.typeId !== 1 && React.createElement('button', 
+                        { onClick: () => toggleIncomeType(inc.typeId), className: "text-red-400 hover:text-red-600" }, 
+                        React.createElement(X, { size: 18 })
+                      )
+                    ),
+                    
+                    <input
+                      type="number"
+                      min="0"
+                      step="1000"
+                      value={inc.amount}
+                      onChange={(e) => handleIncomeChange(inc.typeId, 'amount', e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                      placeholder="0"
+                    />
+                    
+                    {typeInfo.subOptions && (
+                      <div className="mt-3">
+                        <select
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          value={inc.expenseRate}
+                          onChange={(e) => handleIncomeChange(inc.typeId, 'expenseRate', parseFloat(e.target.value))}
+                        >
+                          {typeInfo.subOptions.map(opt => (
+                            <option key={opt.label} value={opt.rate}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    
+                    {incomeMode === 'monthly' && inc.amount > 0 && (
+                      <div className="mt-2 text-sm text-gray-500">
+                        เทียบเท่าต่อปี: {(inc.amount * 12).toLocaleString()} บาท
+                      </div>
+                    )}
+                  </div>
+                );
+              }),
+              
+              React.createElement('div', { className: "pt-4 border-t border-gray-200" },
+                React.createElement('p', { className: "text-sm text-gray-500 mb-3" }, "เพิ่มรายได้ประเภทอื่น:" },
+                React.createElement('div', { className: "flex flex-wrap gap-2" },
+                  incomes.filter(i => !i.active && i.typeId !== 1).map(inc => {
+                    const info = INCOME_TYPES.find(t => t.id === inc.typeId);
+                    return React.createElement('button', {
+                      key: inc.typeId,
+                      onClick: () => toggleIncomeType(inc.typeId),
+                      className: "flex items-center gap-1 px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-600 hover:border-primary hover:text-primary",
+                    }, React.createElement(Plus, { size: 14 }), info.name.split(' ')[0]);
+                  })
+                )
+              )
+            )
+          )
+        )
+      );
+    };
 
-  // --- VIEW RENDERING ---
+    /***** หน้าจอแสดงลดหย่อน *****/
+    const renderDeductionPage = () => {
+      return (
+        React.createElement('div', { className: "space-y-6" },
+          React.createElement('div', { className: "card p-6" },
+            React.createElement('h2', { className: "text-xl font-bold text-gray-800 mb-6" }, "ค่าลดหย่อนภาษี" },
+            
+            React.createElement('div', { className: "space-y-8" },
+              DEDUCTION_CATEGORIES.map(category => (
+                React.createElement('div', { key: category.id },
+                  React.createElement('div', { className: "flex items-center gap-2 mb-4" },
+                    React.createElement(category.icon, { className: "w-5 h-5 text-primary" }),
+                    React.createElement('h3', { className: "text-lg font-semibold text-gray-800" }, category.title)
+                  ),
+                  
+                  React.createElement('div', { className: "space-y-4" },
+                    category.items.map(item => {
+                      const currentValue = deductions[item.key] || 0;
+                      return (
+                        React.createElement('div', { key: item.key, className: "flex flex-col md:flex-row md:items-center justify-between gap-2 p-4 bg-gray-50 rounded-lg" },
+                          React.createElement('div', { className: "flex-1" },
+                            React.createElement('div', { className: "flex items-center gap-2 mb-1" },
+                              React.createElement('span', { className: "font-medium text-gray-700" }, item.label),
+                              item.max && React.createElement('span', { className: "text-xs text-gray-500" }, `(สูงสุด ${item.max.toLocaleString()} บาท)`)
+                            ),
+                            React.createElement('p', { className: "text-sm text-gray-500" }, item.desc)
+                          ),
+                          
+                          React.createElement('div', { className: "flex items-center gap-2" },
+                            React.createElement('input', {
+                              type: "number",
+                              min: "0",
+                              value: currentValue,
+                              onChange: (e) => setDeductions({ ...deductions, [item.key]: Number(e.target.value) || 0 }),
+                              className: "w-32 px-3 py-2 border border-gray-300 rounded-lg text-right focus:ring-2 focus:ring-primary outline-none",
+                              placeholder: "0"
+                            }),
+                            React.createElement('span', { className: "text-gray-500" }, "บาท")
+                          )
+                        )
+                      );
+                    })
+                  )
+                )
+              ))
+            )
+          )
+        )
+      );
+    };
 
-  if (loading) return <div className="flex h-screen items-center justify-center bg-slate-50">Loading ttb task...</div>;
+    /***** หน้าจอดashboard *****/
+    const renderDashboard = () => {
+      const results = calculateResults;
+      
+      return (
+        React.createElement('div', { className: "space-y-6" },
+          React.createElement(BalanceCard, {
+            netIncome: results.netIncome,
+            taxPayable: results.taxPayable,
+            totalIncome: results.totalIncome
+          }),
+          
+          React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-2 gap-6" },
+            React.createElement('div', { className: "card p-6" },
+              React.createElement('h3', { className: "text-lg font-bold text-gray-800 mb-4" }, "สรุปการคำนวณ" },
+              React.createElement('div', { className: "space-y-3" },
+                React.createElement('div', { className: "flex justify-between" },
+                  React.createElement('span', { className: "text-gray-600" }, "รายได้รวม" },
+                  React.createElement('span', { className: "font-semibold" }, results.totalIncome.toLocaleString() + " บาท"})
+                ),
+                React.createElement('div', { className: "flex justify-between" },
+                  React.createElement('span', { className: "text-gray-600" }, "หักค่าใช้จ่ายมาตรา 40" },
+                  React.createElement('span', { className: "text-red-600 font-semibold" }, "-" + results.totalExpenses.toLocaleString() + " บาท"})
+                ),
+                React.createElement('div', { className: "flex justify-between border-t border-gray-200 pt-2" },
+                  React.createElement('span', { className: "text-gray-800 font-medium" }, "เงินได้พึงประเมิน" },
+                  React.createElement('span', { className: "font-bold" }, results.incomeBeforeDeductions.toLocaleString() + " บาท"})
+                ),
+                React.createElement('div', { className: "flex justify-between" },
+                  React.createElement('span', { className: "text-gray-600" }, "หักค่าลดหย่อนทั้งหมด" },
+                  React.createElement('span', { className: "text-red-600 font-semibold" }, "-" + results.totalDeductions.toLocaleString() + " บาท"})
+                ),
+                React.createElement('div', { className: "flex justify-between border-t border-gray-200 pt-2" },
+                  React.createElement('span', { className: "text-gray-800 font-medium" }, "เงินได้สุทธิ" },
+                  React.createElement('span', { className: "font-bold text-primary" }, results.netIncome.toLocaleString() + " บาท"})
+                ),
+                React.createElement('div', { className: "flex justify-between border-t-2 border-gray-300 pt-2 mt-2" },
+                  React.createElement('span', { className: "text-gray-800 font-bold" }, "ภาษีต้องชำระ" },
+                  React.createElement('span', { className: "text-xl font-bold text-red-600" }, results.taxPayable.toLocaleString() + " บาท"})
+                )
+              )
+            ),
+            
+            React.createElement('div', { className: "card p-6" },
+              React.createElement('h3', { className: "text-lg font-bold text-gray-800 mb-4" }, "อัตราภาษีแบบขั้นบันได 2566" },
+              React.createElement('div', { className: "space-y-2" },
+                TAX_BRACKETS_2023.map((bracket, index) => (
+                  React.createElement('div', { 
+                    key: index, 
+                    className: `flex justify-between p-2 rounded ${results.netIncome > bracket.min ? 'bg-blue-50' : ''}` 
+                  },
+                    React.createElement('span', { className: "text-sm" },
+                      bracket.max === Infinity ? 
+                        `เกิน ${bracket.min.toLocaleString()} บาท` :
+                        `${bracket.min.toLocaleString()} - ${bracket.max.toLocaleString()} บาท`
+                    ),
+                    React.createElement('span', { className: "font-medium" }, `อัตรา ${(bracket.rate * 100)}%`)
+                  )
+                ))
+              ),
+              React.createElement('div', { className: "mt-4 p-3 bg-gray-50 rounded-lg" },
+                React.createElement('p', { className: "text-sm text-gray-600" },
+                  "เงินได้สุทธิของคุณอยู่ในช่วง: ",
+                  React.createElement('span', { className: "font-semibold" },
+                    TAX_BRACKETS_2023.find(b => results.netIncome > b.min && results.netIncome <= b.max)?.min?.toLocaleString() || "0",
+                    " - ",
+                    TAX_BRACKETS_2023.find(b => results.netIncome > b.min && results.netIncome <= b.max)?.max === Infinity ? 
+                      "∞" : 
+                      TAX_BRACKETS_2023.find(b => results.netIncome > b.min && results.netIncome <= b.max)?.max?.toLocaleString(),
+                    " บาท"
+                  )
+                )
+              )
+            )
+          ),
+          
+          React.createElement('div', { className: "card p-6" },
+            React.createElement('h3', { className: "text-lg font-bold text-gray-800 mb-4" }, "รายละเอียดค่าใช้จ่ายและลดหย่อน" },
+            React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-2 gap-6" },
+              React.createElement('div', null,
+                React.createElement('h4', { className: "font-semibold text-gray-700 mb-3" }, "ค่าใช้จ่ายมาตรา 40" },
+                React.createElement('div', { className: "space-y-2" },
+                  results.expensesDetail.map((exp, idx) => (
+                    React.createElement('div', { key: idx, className: "flex justify-between text-sm" },
+                      React.createElement('span', { className: "text-gray-600" }, exp.type },
+                      React.createElement('span', { className: "text-red-600" }, "-" + exp.amount.toLocaleString() + " บาท"})
+                    )
+                  ))
+                )
+              ),
+              
+              React.createElement('div', null,
+                React.createElement('h4', { className: "font-semibold text-gray-700 mb-3" }, "ค่าลดหย่อน" },
+                React.createElement('div', { className: "space-y-2" },
+                  results.deductionsDetail.map((ded, idx) => (
+                    React.createElement('div', { key: idx, className: "flex justify-between text-sm" },
+                      React.createElement('span', { className: "text-gray-600" }, ded.category },
+                      React.createElement('span', { className: "text-blue-600" }, "-" + ded.amount.toLocaleString() + " บาท"})
+                    )
+                  ))
+                )
+              )
+            )
+          )
+        )
+      );
+    };
 
-  if (!currentUser) {
-    return <LoginScreen onLogin={handleLogin} />;
+    /***** ฟังก์ชันจัดการรายได้ *****/
+    const handleIncomeChange = (id, field, val) => {
+      const newIncomes = incomes.map(inc =>
+        inc.typeId === id ? { ...inc, [field]: Number(val) || 0 } : inc
+      );
+      setIncomes(newIncomes);
+    };
+
+    const toggleIncomeType = (id) => {
+      setIncomes(incomes.map(inc =>
+        inc.typeId === id ? { ...inc, active: !inc.active } : inc
+      ));
+    };
+
+    return (
+      React.createElement('div', { className: "min-h-screen bg-gray-50" },
+        React.createElement('div', { className: "max-w-6xl mx-auto px-4 py-6" },
+          React.createElement('header', { className: "mb-8" },
+            React.createElement('div', { className: "flex justify-between items-center mb-6" },
+              React.createElement('div', null,
+                React.createElement('h1', { className: "text-2xl font-bold gradient-text" }, "TAX Calculator 2566" },
+                React.createElement('p', { className: "text-gray-600" }, "คำนวณภาษีเงินได้บุคคลธรรมดาตามกฎหมายปัจจุบัน" }
+              )
+            ),
+            React.createElement('div', { className: "text-right" },
+              React.createElement('p', { className: "text-sm text-gray-500" }, "ประจำปี" },
+              React.createElement('p', { className: "font-bold text-primary" }, "พ.ศ. 2566-2567" }
+            )
+          )
+        ),
+        
+        React.createElement('div', { className: "mb-6" },
+          React.createElement('div', { className: "flex overflow-x-auto bg-gray-100 p-1 rounded-xl" },
+            [
+              { id: 'income', label: 'รายได้', icon: DollarSign },
+              { id: 'deduction', label: 'ลดหย่อน', icon: FileText },
+              { id: 'dashboard', label: 'ผลการคำนวณ', icon: Calculator },
+              { id: 'info', label: 'ข้อมูลกฎหมาย', icon: BookOpen },
+            ].map(tab => (
+              React.createElement('button', {
+                key: tab.id,
+                onClick: () => setActiveTab(tab.id),
+                className: `flex items-center gap-2 px-4 py-3 rounded-lg whitespace-nowrap ${activeTab === tab.id ? 'tab-active' : 'text-gray-600 hover:bg-gray-200'}`,
+              },
+                React.createElement(tab.icon, { size: 18 }),
+                React.createElement('span', { className: "font-medium" }, tab.label)
+              )
+            ))
+          )
+        ),
+        
+        React.createElement('main', null,
+          activeTab === 'income' && renderIncomePage(),
+          activeTab === 'deduction' && renderDeductionPage(),
+          activeTab === 'dashboard' && renderDashboard(),
+          activeTab === 'info' && React.createElement('div', { className: "card p-6" },
+            React.createElement('h2', { className: "text-xl font-bold text-gray-800 mb-4" }, "ข้อมูลกฎหมายภาษี 2566" },
+            React.createElement('div', { className: "space-y-4" },
+              React.createElement('div', { className: "p-4 bg-blue-50 rounded-lg" },
+                React.createElement('h3', { className: "font-semibold text-blue-800 mb-2" }, "หลักเกณฑ์สำคัญ" },
+                React.createElement('ul', { className: "list-disc list-inside text-sm text-blue-700 space-y-1" },
+                  React.createElement('li', null, "เงินได้ประเภท 40(1) และ 40(2) หักค่าใช้จ่ายรวมกันไม่เกิน 100,000 บาท" },
+                  React.createElement('li', null, "ส่วนตัวหักอัตโนมัติ 60,000 บาททุกคน" },
+                  React.createElement('li', null, "ประกันชีวิต+สุขภาพรวมกันไม่เกิน 100,000 บาท" },
+                  React.createElement('li', null, "RMF/SSF/PVD รวมกันไม่เกิน 500,000 บาท" },
+                  React.createElement('li', null, "เงินบริจาคหักได้ไม่เกิน 10% ของเงินได้หลังหักลดหย่อนอื่น" }
+                )
+              ),
+              React.createElement('div', { className: "p-4 bg-green-50 rounded-lg" },
+                React.createElement('h3', { className: "font-semibold text-green-800 mb-2" }, "แหล่งข้อมูลอ้างอิง" },
+                React.createElement('ul', { className: "text-sm text-green-700 space-y-1" },
+                  React.createElement('li', null, "ประมวลรัษฎากร มาตรา 40, 47" },
+                  React.createElement('li', null, "กรมสรรพากร ประกาศปี 2566" },
+                  React.createElement('li', null, "ข้อมูล ณ วันที่ 1 มกราคม 2567" }
+                )
+              )
+            )
+          )
+        ),
+        
+        React.createElement('footer', { className: "mt-8 pt-6 border-t border-gray-200 text-center text-gray-500 text-sm" },
+          React.createElement('p', null, "คำนวณภาษีเงินได้บุคคลธรรมดาตามกฎหมายไทย" },
+          React.createElement('p', { className: "mt-1" }, "© 2567 ข้อมูลอ้างอิงจากกรมสรรพากร" }
+        )
+      )
+    );
   }
 
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-sans">
-      {/* HEADER */}
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur shadow-sm px-4 py-3 flex justify-between items-center">
-        <div>
-          <div className="text-xs text-slate-500">ยินดีต้อนรับ</div>
-          <div className="font-bold text-lg text-[#002d63] flex items-center gap-2">
-            {currentUser.nickname} ({currentUser.role})
-          </div>
-        </div>
-        <div 
-          onClick={() => setActiveTab('profile')}
-          className="w-10 h-10 rounded-full bg-gradient-to-br from-[#002d63] to-[#0099d8] text-white flex items-center justify-center font-bold cursor-pointer shadow-md transform active:scale-95 transition-all">
-          {currentUser.nickname.substring(0, 2).toUpperCase()}
-        </div>
-      </header>
+  // Mount
+  const root = createRoot(document.getElementById('root'));
+  root.render(React.createElement(React.StrictMode, null, React.createElement(App)));
 
-      {/* CONTENT AREA */}
-      <main className="p-4 max-w-md mx-auto">
-        {activeTab === 'home' && (
-          <DashboardView 
-            tasks={tasks} 
-            currentUser={currentUser} 
-            onNavigate={setActiveTab} 
-          />
-        )}
-        
-        {activeTab === 'schedule' && (
-          <ScheduleView 
-            tasks={tasks} 
-            currentUser={currentUser} 
-            onDelete={deleteTask}
-          />
-        )}
-
-        {activeTab === 'add' && (
-          <AddEditTaskView 
-            currentUser={currentUser} 
-            onSave={addTask} 
-            onCancel={() => setActiveTab('schedule')} 
-            allUsers={SYSTEM_USERS}
-          />
-        )}
-
-        {activeTab === 'daily' && (
-          <DailySummaryView 
-            tasks={tasks} 
-            allUsers={SYSTEM_USERS}
-          />
-        )}
-
-        {activeTab === 'profile' && (
-          <ProfileView 
-            currentUser={currentUser} 
-            onLogout={handleLogout} 
-          />
-        )}
-      </main>
-
-      {/* BOTTOM NAVIGATION */}
-      <nav className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 h-[70px] flex justify-around items-center z-50 pb-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <NavItem icon={Home} label="Home" active={activeTab === 'home'} onClick={() => setActiveTab('home')} />
-        <NavItem icon={Calendar} label="ตารางงาน" active={activeTab === 'schedule'} onClick={() => setActiveTab('schedule')} />
-        <div className="relative -top-6">
-          <button 
-            onClick={() => setActiveTab('add')}
-            className="w-14 h-14 rounded-full bg-gradient-to-r from-[#002d63] to-[#0099d8] text-white flex items-center justify-center shadow-lg transform active:scale-90 transition-all border-4 border-slate-50">
-            <Plus size={28} />
-          </button>
-        </div>
-        <NavItem icon={ListChecks} label="สรุปงาน" active={activeTab === 'daily'} onClick={() => setActiveTab('daily')} />
-        <NavItem icon={User} label="โปรไฟล์" active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
-      </nav>
-    </div>
-  );
-}
-
-// --- SUB-COMPONENTS ---
-
-const NavItem = ({ icon: Icon, label, active, onClick }) => (
-  <button 
-    onClick={onClick} 
-    className={`flex flex-col items-center justify-center w-16 gap-1 transition-colors ${active ? 'text-[#002d63]' : 'text-slate-400'}`}
-  >
-    <Icon size={22} strokeWidth={active ? 2.5 : 2} />
-    <span className="text-[10px] font-medium">{label}</span>
-  </button>
-);
-
-const LoginScreen = ({ onLogin }) => {
-  const [input, setInput] = useState('');
-  
-  return (
-    <div className="h-screen flex flex-col items-center justify-center p-6 bg-slate-50">
-      <div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-xl border border-slate-100 text-center">
-        <div className="w-20 h-20 bg-gradient-to-br from-[#002d63] to-[#0099d8] rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-lg rotate-3">
-            <Calendar size={40} className="text-white" />
-        </div>
-        <h1 className="text-2xl font-bold text-[#002d63] mb-2">ttb trainer task</h1>
-        <p className="text-slate-500 text-sm mb-8">ระบบจัดการตารางงานเทรนเนอร์</p>
-        
-        <div className="text-left mb-6">
-          <label className="text-xs font-semibold text-slate-700 ml-1">User ID</label>
-          <input 
-            type="text" 
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="เช่น ttb_yj, ttb_tt"
-            className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0099d8] transition-all"
-            onKeyDown={(e) => e.key === 'Enter' && onLogin(input)}
-          />
-          <div className="mt-2 text-xs text-slate-400 flex gap-2 flex-wrap">
-             <span className="cursor-pointer hover:text-blue-500" onClick={() => setInput('ttb_yj')}>Master (ttb_yj)</span>
-             <span className="cursor-pointer hover:text-blue-500" onClick={() => setInput('ttb_ac')}>Admin (ttb_ac)</span>
-             <span className="cursor-pointer hover:text-blue-500" onClick={() => setInput('ttb_tt')}>Trainer (ttb_tt)</span>
-          </div>
-        </div>
-
-        <button 
-          onClick={() => onLogin(input)}
-          className="w-full py-3 rounded-xl bg-gradient-to-r from-[#002d63] to-[#0099d8] text-white font-bold shadow-lg active:scale-95 transition-transform"
-        >
-          เข้าสู่ระบบ
-        </button>
-      </div>
-    </div>
-  );
-};
-
-const DashboardView = ({ tasks, currentUser, onNavigate }) => {
-  const today = formatDate(new Date());
-  const todayTasks = tasks.filter(t => t.date === today);
-  
-  const myTasksToday = todayTasks.filter(t => t.trainerId === currentUser.id);
-  const onlineCount = todayTasks.filter(t => t.method === 'Online').length;
-  const f2fCount = todayTasks.filter(t => t.method === 'F2F').length;
-
-  return (
-    <div className="space-y-6">
-      {/* SUMMARY CARD */}
-      <div className="bg-gradient-to-br from-[#002d63] to-[#0099d8] rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-xl"></div>
-        <div className="relative z-10">
-          <h2 className="text-blue-100 text-sm font-medium mb-1">ภาพรวมวันนี้</h2>
-          <div className="flex items-baseline gap-2 mb-4">
-            <span className="text-4xl font-bold">{todayTasks.length}</span>
-            <span className="text-blue-200">งานทั้งหมด</span>
-          </div>
-          <div className="h-[1px] bg-white/20 w-full mb-4"></div>
-          <div className="flex justify-between text-sm">
-            <div className="flex flex-col items-center flex-1 border-r border-white/20">
-              <span className="opacity-70">Online</span>
-              <span className="text-lg font-bold">{onlineCount}</span>
-            </div>
-            <div className="flex flex-col items-center flex-1">
-              <span className="opacity-70">Face-to-Face</span>
-              <span className="text-lg font-bold">{f2fCount}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* MY SCHEDULE PREVIEW */}
-      <div>
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-slate-800 text-lg">งานของฉันวันนี้</h3>
-          <button onClick={() => onNavigate('schedule')} className="text-sm text-[#0099d8] font-medium">ดูทั้งหมด</button>
-        </div>
-        {myTasksToday.length > 0 ? (
-          <div className="space-y-3">
-             {myTasksToday.map(task => <TaskCard key={task.id} task={task} simple />)}
-          </div>
-        ) : (
-          <div className="bg-white p-6 rounded-xl border border-dashed border-slate-300 text-center text-slate-400">
-            ไม่มีงานในวันนี้
-          </div>
-        )}
-      </div>
-
-      {/* AVAILABILITY QUICK LOOK */}
-      <AvailabilityWidget tasks={todayTasks} allUsers={SYSTEM_USERS} />
-    </div>
-  );
-};
-
-const AvailabilityWidget = ({ tasks, allUsers }) => {
-  const [filter, setFilter] = useState('free'); // free | busy
-  
-  const availability = useMemo(() => {
-    return allUsers.map(user => {
-      const userTasks = tasks.filter(t => t.trainerId === user.id);
-      return { ...user, status: userTasks.length > 0 ? 'busy' : 'free', tasks: userTasks };
-    });
-  }, [tasks, allUsers]);
-
-  const displayed = availability.filter(u => u.status === filter);
-
-  return (
-    <div>
-       <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-slate-800 text-lg">สถานะเพื่อนร่วมทีม</h3>
-          <div className="bg-white rounded-lg p-1 border border-slate-200 flex text-xs">
-            <button 
-              onClick={() => setFilter('free')}
-              className={`px-3 py-1 rounded-md transition-colors ${filter === 'free' ? 'bg-green-100 text-green-700 font-bold' : 'text-slate-500'}`}>
-              ว่าง ({availability.filter(u => u.status === 'free').length})
-            </button>
-            <button 
-              onClick={() => setFilter('busy')}
-              className={`px-3 py-1 rounded-md transition-colors ${filter === 'busy' ? 'bg-red-100 text-red-700 font-bold' : 'text-slate-500'}`}>
-              มีงาน ({availability.filter(u => u.status === 'busy').length})
-            </button>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-2 max-h-60 overflow-y-auto">
-           {displayed.map(user => (
-             <div key={user.id} className="flex items-center gap-3 p-2 border-b border-slate-50 last:border-0">
-                <div className={`w-2 h-2 rounded-full ${user.status === 'free' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-slate-700">{user.nickname}</div>
-                  {user.status === 'busy' && (
-                    <div className="text-xs text-slate-400 truncate w-48">
-                      {user.tasks[0].partner}: {user.tasks[0].detail}
-                    </div>
-                  )}
-                </div>
-             </div>
-           ))}
-        </div>
-    </div>
-  );
-};
-
-const ScheduleView = ({ tasks, currentUser, onDelete }) => {
-  const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
-  
-  const filteredTasks = tasks.filter(t => t.date === selectedDate);
-  const sortedTasks = [...filteredTasks].sort((a, b) => a.startTime.localeCompare(b.startTime));
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 mb-4 bg-white p-2 rounded-xl shadow-sm border border-slate-100">
-         <div className="p-2 bg-blue-50 text-[#002d63] rounded-lg">
-           <Calendar size={20} />
-         </div>
-         <input 
-            type="date" 
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="flex-1 text-sm bg-transparent font-medium focus:outline-none"
-         />
-      </div>
-
-      <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">
-        {getThaiDateString(selectedDate)}
-      </h3>
-
-      <div className="space-y-3 pb-20">
-        {sortedTasks.length === 0 ? (
-          <div className="text-center py-10 text-slate-400">ไม่มีตารางงานในวันนี้</div>
-        ) : (
-          sortedTasks.map(task => (
-            <TaskCard 
-              key={task.id} 
-              task={task} 
-              canEdit={currentUser.role === ROLES.MASTER || currentUser.role === ROLES.ADMIN || currentUser.id === task.trainerId}
-              onDelete={() => onDelete(task.id)}
-            />
-          ))
-        )}
-      </div>
-    </div>
-  );
-};
-
-const AddEditTaskView = ({ currentUser, onSave, onCancel, allUsers }) => {
-  const [formData, setFormData] = useState({
-    date: formatDate(new Date()),
-    startTime: '09:00',
-    endTime: '12:00',
-    trainerId: currentUser.role === ROLES.TRAINER ? currentUser.id : '',
-    partner: 'ttb',
-    method: 'F2F',
-    detail: '',
-    location: '',
-  });
-
-  const [saving, setSaving] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!formData.detail || !formData.trainerId || !formData.location) {
-      alert('กรุณากรอกข้อมูลให้ครบถ้วน');
-      return;
-    }
-    setSaving(true);
-    
-    // Auto assign Team based on Trainer
-    const selectedTrainer = allUsers.find(u => u.id === formData.trainerId);
-    const taskToSave = {
-      ...formData,
-      team: selectedTrainer?.team || 'Other',
-      trainerName: selectedTrainer?.name,
-      trainerNickname: selectedTrainer?.nickname
-    };
-
-    const success = await onSave(taskToSave);
-    if (success) {
-      onCancel();
-    }
-    setSaving(false);
-  };
-
-  const canSelectTrainer = currentUser.role === ROLES.MASTER || currentUser.role === ROLES.ADMIN;
-
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-4">
-      <div className="flex justify-between items-center mb-2">
-        <h2 className="text-xl font-bold text-[#002d63]">เพิ่มตารางงานใหม่</h2>
-        <button onClick={onCancel} className="text-slate-400"><ChevronLeft /></button>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-xs font-semibold text-slate-500">วันที่</label>
-          <input 
-            type="date" 
-            value={formData.date}
-            onChange={e => setFormData({...formData, date: e.target.value})}
-            className="w-full mt-1 p-3 bg-slate-50 rounded-lg text-sm"
-          />
-        </div>
-        <div className="flex gap-2">
-           <div className="flex-1">
-             <label className="text-xs font-semibold text-slate-500">เริ่ม</label>
-             <input type="time" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} className="w-full mt-1 p-3 bg-slate-50 rounded-lg text-sm" />
-           </div>
-           <div className="flex-1">
-             <label className="text-xs font-semibold text-slate-500">ถึง</label>
-             <input type="time" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} className="w-full mt-1 p-3 bg-slate-50 rounded-lg text-sm" />
-           </div>
-        </div>
-      </div>
-
-      <div>
-        <label className="text-xs font-semibold text-slate-500">เทรนเนอร์</label>
-        <select 
-          value={formData.trainerId}
-          disabled={!canSelectTrainer}
-          onChange={e => setFormData({...formData, trainerId: e.target.value})}
-          className={`w-full mt-1 p-3 rounded-lg text-sm ${!canSelectTrainer ? 'bg-slate-100 text-slate-500' : 'bg-slate-50'}`}
-        >
-          <option value="">เลือกเทรนเนอร์</option>
-          {allUsers.map(u => (
-            <option key={u.id} value={u.id}>{u.nickname} ({u.team})</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-         <div>
-            <label className="text-xs font-semibold text-slate-500">Partner</label>
-            <select 
-              value={formData.partner}
-              onChange={e => setFormData({...formData, partner: e.target.value})}
-              className="w-full mt-1 p-3 bg-slate-50 rounded-lg text-sm"
-            >
-              {PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-         </div>
-         <div>
-            <label className="text-xs font-semibold text-slate-500">รูปแบบ</label>
-            <div className="flex gap-2 mt-1">
-              {METHODS.map(m => (
-                <button
-                  key={m}
-                  onClick={() => setFormData({...formData, method: m})}
-                  className={`flex-1 py-2 text-xs rounded-lg border ${formData.method === m ? 'bg-blue-50 border-blue-500 text-blue-700 font-bold' : 'border-slate-200 text-slate-500'}`}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-         </div>
-      </div>
-
-      <div>
-        <label className="text-xs font-semibold text-slate-500">รายละเอียดงาน (Course)</label>
-        <input 
-          type="text" 
-          value={formData.detail}
-          onChange={e => setFormData({...formData, detail: e.target.value})}
-          placeholder="ระบุชื่อหลักสูตร หรือรายละเอียด"
-          className="w-full mt-1 p-3 bg-slate-50 rounded-lg text-sm"
-        />
-      </div>
-
-      <div>
-        <label className="text-xs font-semibold text-slate-500">สถานที่ (Location)</label>
-        <input 
-          type="text" 
-          value={formData.location}
-          onChange={e => setFormData({...formData, location: e.target.value})}
-          placeholder="เช่น MS Teams, ttb สำนักงานใหญ่"
-          className="w-full mt-1 p-3 bg-slate-50 rounded-lg text-sm"
-        />
-      </div>
-
-      <div className="pt-4 flex gap-3">
-        <button 
-          onClick={handleSubmit} 
-          disabled={saving}
-          className="flex-1 py-3 bg-gradient-to-r from-[#002d63] to-[#0099d8] text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all">
-          {saving ? 'กำลังบันทึก...' : 'บันทึกตารางงาน'}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-const DailySummaryView = ({ tasks, allUsers }) => {
-  const [targetDate, setTargetDate] = useState(getTomorrowDate());
-  const [copied, setCopied] = useState(false);
-
-  // LOGIC: GENERATE TEXT FOR LINE
-  const generateText = () => {
-    const dayTasks = tasks.filter(t => t.date === targetDate);
-    const specialistTasks = dayTasks.filter(t => t.team === TEAMS.SPECIALIST);
-    const mandatoryTasks = dayTasks.filter(t => t.team === TEAMS.MANDATORY);
-
-    const formatTask = (t) => {
-       const icon = t.method === 'Online' ? '💻' : '🏢';
-       return `   - ${t.partner}:(${t.method}) ${t.detail} @${t.location} (${t.startTime}-${t.endTime})`;
-    };
-
-    let text = `${getThaiDateString(targetDate)}\n\n`;
-
-    // Section 1: Specialist
-    text += `♡ ${TEAMS.SPECIALIST}\n`;
-    if (specialistTasks.length === 0) {
-      text += `   (ไม่มีตารางงาน)\n`;
-    } else {
-      // Group by trainer to match requested format "● Trainer Name"
-      const trainers = [...new Set(specialistTasks.map(t => t.trainerId))];
-      trainers.forEach(tid => {
-        const u = allUsers.find(user => user.id === tid);
-        const userTasks = specialistTasks.filter(t => t.trainerId === tid);
-        text += `● ${u ? u.name : tid}\n`;
-        userTasks.forEach(t => text += `${formatTask(t)}\n`);
-      });
-    }
-
-    text += `\n`;
-
-    // Section 2: Mandatory
-    text += `♡ ${TEAMS.MANDATORY}\n`;
-    if (mandatoryTasks.length === 0) {
-      text += `   (ไม่มีตารางงาน)\n`;
-    } else {
-      const trainers = [...new Set(mandatoryTasks.map(t => t.trainerId))];
-      trainers.forEach(tid => {
-        const u = allUsers.find(user => user.id === tid);
-        const userTasks = mandatoryTasks.filter(t => t.trainerId === tid);
-        text += `● ${u ? u.name : tid}\n`;
-        userTasks.forEach(t => text += `${formatTask(t)}\n`);
-      });
-    }
-
-    return text;
-  };
-
-  const generatedText = useMemo(() => generateText(), [tasks, targetDate]);
-
-  const handleCopy = () => {
-    // Standard clipboard API + Fallback logic handled by document.execCommand in some iframe contexts
-    const textArea = document.createElement("textarea");
-    textArea.value = generatedText;
-    document.body.appendChild(textArea);
-    textArea.select();
-    try {
-        document.execCommand('copy');
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-        console.error('Fallback: Oops, unable to copy', err);
-    }
-    document.body.removeChild(textArea);
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-        <label className="text-xs font-bold text-slate-500 mb-2 block">เลือกวันที่ต้องการสรุป</label>
-        <input 
-          type="date" 
-          value={targetDate}
-          onChange={(e) => setTargetDate(e.target.value)}
-          className="w-full p-2 bg-slate-50 rounded-lg text-sm border border-slate-200"
-        />
-      </div>
-
-      <div className="bg-slate-800 text-slate-200 p-4 rounded-xl font-mono text-xs whitespace-pre-wrap shadow-inner min-h-[300px]">
-        {generatedText}
-      </div>
-
-      <button 
-        onClick={handleCopy}
-        className={`w-full py-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-all ${copied ? 'bg-green-500 text-white' : 'bg-[#002d63] text-white'}`}
-      >
-        {copied ? <Check size={20} /> : <Copy size={20} />}
-        {copied ? 'คัดลอกเรียบร้อย' : 'คัดลอกข้อความสำหรับ LINE'}
-      </button>
-    </div>
-  );
-};
-
-const ProfileView = ({ currentUser, onLogout }) => {
-  return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center">
-         <div className="w-24 h-24 bg-gradient-to-br from-[#002d63] to-[#0099d8] rounded-full mx-auto mb-4 flex items-center justify-center text-3xl font-bold text-white shadow-xl">
-           {currentUser.nickname.substring(0, 2).toUpperCase()}
-         </div>
-         <h2 className="text-xl font-bold text-slate-800">{currentUser.name}</h2>
-         <p className="text-slate-500 text-sm mb-2">{currentUser.email}</p>
-         <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full">
-            {currentUser.role}
-         </span>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-4 border-b border-slate-50 flex justify-between items-center">
-           <span className="text-sm font-medium">สังกัดทีม</span>
-           <span className="text-sm text-slate-500">{currentUser.team || '-'}</span>
-        </div>
-        <div className="p-4 border-b border-slate-50 flex justify-between items-center">
-           <span className="text-sm font-medium">User ID</span>
-           <span className="text-sm text-slate-500 font-mono">{currentUser.id}</span>
-        </div>
-      </div>
-
-      <button 
-        onClick={onLogout}
-        className="w-full py-3 bg-red-50 text-red-600 font-bold rounded-xl border border-red-100 hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
-      >
-        <LogOut size={18} />
-        ออกจากระบบ
-      </button>
-    </div>
-  );
-};
-
-const TaskCard = ({ task, simple, canEdit, onDelete }) => {
-  const isOnline = task.method === 'Online';
-  return (
-    <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 relative group">
-      {canEdit && !simple && (
-        <button 
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="absolute top-2 right-2 text-slate-300 hover:text-red-500 p-2"
-        >
-           <LogOut size={14} className="rotate-180" /> 
-        </button>
-      )}
-      
-      <div className="flex justify-between items-start mb-2">
-        <div className="flex items-center gap-2">
-           <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600">
-             {task.trainerNickname ? task.trainerNickname.substring(0,2).toUpperCase() : 'TT'}
-           </div>
-           <div>
-             <div className="text-sm font-bold text-slate-800">{task.trainerNickname}</div>
-             <div className="text-[10px] text-slate-400">{task.team}</div>
-           </div>
-        </div>
-        <div className="px-2 py-1 bg-blue-50 text-[#002d63] text-xs font-bold rounded-md flex items-center gap-1">
-           <Clock size={12} />
-           {task.startTime} - {task.endTime}
-        </div>
-      </div>
-
-      <div className="flex gap-2 mb-2">
-         <span className={`text-[10px] px-2 py-0.5 rounded-full border ${isOnline ? 'bg-green-50 border-green-200 text-green-700' : 'bg-orange-50 border-orange-200 text-orange-700'}`}>
-            {task.method}
-         </span>
-         <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-            {task.partner}
-         </span>
-      </div>
-
-      <div className="text-sm font-medium text-slate-700 mb-1">
-        {task.detail}
-      </div>
-      
-      {!simple && (
-        <div className="flex items-center gap-1 text-xs text-slate-400 mt-2">
-           {isOnline ? <Video size={12} /> : <MapPin size={12} />}
-           {task.location}
-        </div>
-      )}
-    </div>
-  );
-};
-
+  </script>
+</body>
+</html>
