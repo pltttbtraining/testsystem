@@ -1,703 +1,1371 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="th">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TAX Calculator — Fixed Version</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ttb trainer task</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts: Prompt for Thai -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
 
-  <!-- Tailwind CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Prompt', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: {
+                            start: '#2563eb', // blue-600
+                            end: '#06b6d4',   // cyan-500
+                        },
+                        status: {
+                            ttb: '#002d63',
+                            pd: '#ed1c24',
+                            pru: '#ed1c24',
+                            ttt: '#f68b1f'
+                        }
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                        'glow': '0 4px 20px -2px rgba(6, 182, 212, 0.3)',
+                    }
+                }
+            }
+        }
+    </script>
 
-  <style>
-    :root{
-      --bg:#f8fafc; --card:#ffffff; --muted:#6b7280;
-      --before:#3b82f6; --after:#10b981; --accent:#f59e0b;
-    }
-    html,body,#root { height: 100%; }
-    body { 
-      -webkit-font-smoothing:antialiased; 
-      -moz-osx-font-smoothing:grayscale; 
-      background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color:#0f172a; 
-      font-family:'Inter','Segoe UI',system-ui,Arial,sans-serif;
-    }
-    
-    .card { 
-      background: white; 
-      border-radius: 20px; 
-      box-shadow: 0 10px 30px rgba(0,0,0,0.08); 
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    
-    .gradient-text { 
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    
-    .tab-active { 
-      background: white; 
-      color: #667eea; 
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2); 
-      border-radius: 12px;
-    }
-    
-    .credit-card {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: 20px;
-      color: white;
-      position: relative;
-      overflow: hidden;
-    }
-  </style>
+    <style>
+        /* Custom Styles & Reset */
+        body {
+            background-color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* Gradient Utilities */
+        .bg-gradient-primary {
+            background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
+        }
+        .text-gradient-primary {
+            background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Mobile Optimization */
+        .mobile-container {
+            max-width: 480px;
+            margin: 0 auto;
+            min-height: 100vh;
+            background-color: white;
+            position: relative;
+            padding-bottom: 80px; /* Space for bottom nav */
+            box-shadow: 0 0 20px rgba(0,0,0,0.05);
+        }
+
+        /* Inputs */
+        .input-rounded {
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s;
+        }
+        .input-rounded:focus {
+            border-color: #06b6d4;
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+            outline: none;
+        }
+
+        /* Hide Scrollbar but allow scroll */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        /* Loader */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #3498db;
+            width: 24px;
+            height: 24px;
+            -webkit-animation: spin 1s linear infinite; /* Safari */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
-<body class="antialiased">
-
-  <div id="root"></div>
-
-  <script type="module">
-  import React, { useState, useMemo } from "https://esm.sh/react@18.2.0";
-  import { createRoot } from "https://esm.sh/react-dom@18.2.0/client";
-  import {
-    Calculator, BookOpen, X, Plus, ShieldCheck, Users, 
-    Gift, Home, TrendingUp, DollarSign, FileText, 
-    BarChart3, AlertCircle, ChevronRight
-  } from "https://esm.sh/lucide-react@0.309.0";
-
-  /***** ข้อมูลเงินได้ตามมาตรา 40 *****/
-  const INCOME_TYPES = [
-    { 
-      id: 1, 
-      name: '40(1) เงินเดือน/ค่าจ้าง', 
-      desc: 'เงินเดือน ค่าจ้าง ค่าตอบแทน โบนัส บำเหน็จ บำนาญ', 
-      deductionDesc: 'หักค่าใช้จ่าย 50% ไม่เกิน 100,000 บาท', 
-      defaultRate: 0.5, 
-      hasFixedCap: true,
-      maxCap: 100000
-    },
-    { 
-      id: 2, 
-      name: '40(2) ค่าจ้างทำของ/รับเหมา', 
-      desc: 'ค่าจ้างทำของ ค่าจ้างรับเหมา ค่านายหน้า ค่าคอมมิชชั่น', 
-      deductionDesc: 'หักค่าใช้จ่าย 60% หรือตามจริง', 
-      defaultRate: 0.6, 
-      hasFixedCap: false
-    },
-    { 
-      id: 5, 
-      name: '40(5) ค่าเช่าทรัพย์สิน', 
-      desc: 'ค่าเช่าอสังหาริมทรัพย์, รถยนต์, เรือ, เครื่องจักร', 
-      deductionDesc: 'หักค่าใช้จ่าย 10-30% ตามประเภททรัพย์สิน', 
-      defaultRate: 0.3, 
-      hasFixedCap: false
-    },
-    { 
-      id: 6,
-      name: '40(6) วิชาชีพอิสระ',
-      desc: 'ประกอบโรคศิลปะ, กฎหมาย, วิศวกรรม, สถาปัตยกรรม, บัญชี',
-      deductionDesc: 'เลือกหักค่าใช้จ่ายเหมา 30% หรือ 60% ตามวิชาชีพ',
-      defaultRate: 0.3,
-      hasFixedCap: false
-    },
-    { 
-      id: 8, 
-      name: '40(8) ธุรกิจ/พาณิชย์', 
-      desc: 'ขายของออนไลน์, ค้าขาย, ธุรกิจบริการ, เกษตรกรรม', 
-      deductionDesc: 'หักค่าใช้จ่ายตามจริงหรือเหมา 40-85%', 
-      defaultRate: 0.6, 
-      hasFixedCap: false
-    },
-  ];
-
-  /***** อัตราภาษีเงินได้บุคคลธรรมดา 2566 *****/
-  const TAX_BRACKETS_2023 = [
-    { min: 0, max: 150000, rate: 0.00 },
-    { min: 150000, max: 300000, rate: 0.05 },
-    { min: 300000, max: 500000, rate: 0.10 },
-    { min: 500000, max: 750000, rate: 0.15 },
-    { min: 750000, max: 1000000, rate: 0.20 },
-    { min: 1000000, max: 2000000, rate: 0.25 },
-    { min: 2000000, max: 5000000, rate: 0.30 },
-    { min: 5000000, max: Infinity, rate: 0.35 },
-  ];
-
-  /***** รายการลดหย่อนภาษี *****/
-  const DEDUCTION_CATEGORIES = [
-    {
-      id: 'personal',
-      title: 'ส่วนบุคคลและครอบครัว',
-      icon: Users,
-      items: [
-        { 
-          key: 'personal', 
-          label: 'ส่วนตัว', 
-          desc: 'ลดหย่อนส่วนบุคคลทุกคน 60,000 บาท', 
-          max: 60000,
-          fixed: true
-        },
-        { 
-          key: 'spouse', 
-          label: 'คู่สมรส', 
-          desc: 'คู่สมรสที่ไม่มีเงินได้ หักได้ 60,000 บาท', 
-          max: 60000
-        },
-        { 
-          key: 'child', 
-          label: 'บุตร', 
-          desc: 'บุตร คนละ 30,000 บาท', 
-          max: null,
-          perItem: 30000
-        },
-        { 
-          key: 'parent', 
-          label: 'พ่อ-แม่', 
-          desc: 'ค่าเลี้ยงดูพ่อ-แม่ คนละ 30,000 บาท', 
-          max: null,
-          perItem: 30000
-        }
-      ]
-    },
-    {
-      id: 'insurance',
-      title: 'ประกันชีวิต/สุขภาพ/บำนาญ',
-      icon: ShieldCheck,
-      items: [
-        { 
-          key: 'lifeInsurance', 
-          label: 'ประกันชีวิต', 
-          desc: 'เบี้ยประกันชีวิต หักได้ไม่เกิน 100,000 บาท', 
-          max: 100000
-        },
-        { 
-          key: 'healthInsurance', 
-          label: 'ประกันสุขภาพ', 
-          desc: 'เบี้ยประกันสุขภาพตัวเอง ไม่เกิน 25,000 บาท', 
-          max: 25000
-        },
-        { 
-          key: 'pensionInsurance', 
-          label: 'ประกันบำนาญ', 
-          desc: 'เบี้ยประกันบำนาญ 15% ของเงินได้ ไม่เกิน 200,000 บาท', 
-          max: 200000,
-          percentOfIncome: 0.15
-        }
-      ]
-    },
-    {
-      id: 'investment',
-      title: 'การออม/การลงทุน',
-      icon: TrendingUp,
-      items: [
-        { 
-          key: 'rmf', 
-          label: 'กองทุน RMF', 
-          desc: 'เงินลงทุนใน RMF 30% ของเงินได้ ไม่เกิน 500,000 บาท', 
-          max: 500000,
-          percentOfIncome: 0.30
-        },
-        { 
-          key: 'ssf', 
-          label: 'กองทุน SSF', 
-          desc: 'เงินลงทุนใน SSF 30% ของเงินได้ ไม่เกิน 200,000 บาท', 
-          max: 200000,
-          percentOfIncome: 0.30
-        }
-      ]
-    },
-    {
-      id: 'other',
-      title: 'สิทธิประโยชน์อื่นๆ',
-      icon: Home,
-      items: [
-        { 
-          key: 'mortgageInterest', 
-          label: 'ดอกเบี้ยบ้าน', 
-          desc: 'ดอกเบี้ยบ้านหลังแรก ไม่เกิน 100,000 บาท', 
-          max: 100000
-        },
-        { 
-          key: 'socialSecurity', 
-          label: 'ประกันสังคม', 
-          desc: 'เงินสมทบประกันสังคม สูงสุด 9,000 บาท', 
-          max: 9000
-        }
-      ]
-    }
-  ];
-
-  /***** ฟังก์ชันคำนวณภาษี *****/
-  const calculateTax = (taxableIncome) => {
-    let tax = 0;
-    let remainingIncome = taxableIncome;
+<body class="text-slate-700">
     
-    for (const bracket of TAX_BRACKETS_2023) {
-      if (remainingIncome <= 0) break;
-      
-      const incomeInBracket = Math.min(remainingIncome, bracket.max) - bracket.min;
-      if (incomeInBracket > 0) {
-        tax += incomeInBracket * bracket.rate;
-        remainingIncome -= incomeInBracket;
-      }
-    }
-    
-    return Math.round(tax);
-  };
+    <!-- MODE SELECTION SCREEN -->
+    <div id="mode-selection" class="mobile-container flex flex-col justify-center items-center p-8 bg-white absolute top-0 left-0 right-0 z-50">
+        <div class="w-24 h-24 rounded-2xl bg-gradient-primary flex items-center justify-center text-white font-bold text-4xl shadow-glow mb-6">
+            TS
+        </div>
+        <h2 class="text-2xl font-bold text-slate-800 mb-1">ttb trainer system</h2>
+        <p class="text-slate-400 text-sm mb-8">เลือกโหมดการทำงาน</p>
 
-  /***** Component หลัก *****/
-  function App() {
-    const [activeTab, setActiveTab] = useState('income');
-    const [incomeMode, setIncomeMode] = useState('yearly');
-    
-    // รายได้แต่ละประเภท
-    const [incomes, setIncomes] = useState([
-      { typeId: 1, amount: 300000, active: true, expenseRate: 0.5 },
-      { typeId: 2, amount: 0, active: false, expenseRate: 0.6 },
-      { typeId: 5, amount: 0, active: false, expenseRate: 0.3 },
-      { typeId: 6, amount: 0, active: false, expenseRate: 0.3 },
-      { typeId: 8, amount: 0, active: false, expenseRate: 0.6 },
-    ]);
-    
-    // ข้อมูลลดหย่อน
-    const [deductions, setDeductions] = useState({
-      personal: 60000,
-      spouse: 0,
-      child: 0,
-      parent: 0,
-      lifeInsurance: 0,
-      healthInsurance: 0,
-      pensionInsurance: 0,
-      rmf: 0,
-      ssf: 0,
-      mortgageInterest: 0,
-      socialSecurity: 0
-    });
-    
-    const [errors, setErrors] = useState([]);
+        <div class="w-full space-y-4">
+            <!-- Production Mode -->
+            <div class="border-2 border-blue-100 rounded-xl p-5 hover:border-blue-300 transition-all hover:shadow-lg">
+                <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-rocket"></i>
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="font-bold text-slate-800">Production Mode</h3>
+                        <p class="text-slate-500 text-xs mt-1">ระบบจริงสำหรับใช้งานประจำวัน</p>
+                    </div>
+                </div>
+                <button onclick="selectMode('production')" class="w-full mt-3 bg-gradient-primary text-white font-semibold py-2.5 rounded-lg hover:shadow-lg transition-all text-sm">
+                    เข้าสู่ระบบ Production
+                </button>
+            </div>
 
-    /***** ฟังก์ชันจัดการรายได้ *****/
-    const handleIncomeChange = (id, field, val) => {
-      const newIncomes = incomes.map(inc =>
-        inc.typeId === id ? { ...inc, [field]: Number(val) || 0 } : inc
-      );
-      setIncomes(newIncomes);
-    };
+            <!-- UAT/Mockup Mode -->
+            <div class="border-2 border-orange-100 rounded-xl p-5 hover:border-orange-300 transition-all hover:shadow-lg">
+                <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-flask"></i>
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="font-bold text-slate-800">UAT / Mockup Mode</h3>
+                        <p class="text-slate-500 text-xs mt-1">ระบบทดสอบและจำลอง</p>
+                    </div>
+                </div>
+                
+                <!-- Passcode Input -->
+                <div id="passcode-section" class="mt-3 hidden">
+                    <div class="relative">
+                        <input type="password" id="uat-passcode" 
+                               class="w-full px-3 py-2 border-2 border-orange-200 rounded-lg focus:border-orange-400 focus:outline-none text-sm"
+                               placeholder="กรุณากรอกรหัสผ่าน UAT">
+                        <button onclick="togglePasscodeVisibility()" class="absolute right-3 top-2 text-slate-400">
+                            <i id="eye-icon" class="fa-solid fa-eye"></i>
+                        </button>
+                    </div>
+                    <div id="passcode-error" class="text-red-500 text-xs mt-1 hidden"></div>
+                </div>
 
-    const toggleIncomeType = (id) => {
-      setIncomes(incomes.map(inc =>
-        inc.typeId === id ? { ...inc, active: !inc.active, amount: inc.active ? 0 : inc.amount } : inc
-      ));
-    };
+                <button onclick="toggleUATMode()" class="w-full mt-3 bg-gradient-to-r from-orange-500 to-yellow-500 text-white font-semibold py-2.5 rounded-lg hover:shadow-lg transition-all text-sm">
+                    เข้าสู่ระบบ UAT / Mockup
+                </button>
+            </div>
 
-    /***** คำนวณผลลัพธ์ *****/
-    const calculateResults = useMemo(() => {
-      const newErrors = [];
-      
-      // คำนวณรายได้รวม (แปลงเป็นรายปีถ้าเป็นรายเดือน)
-      let totalIncome = 0;
-      incomes.filter(inc => inc.active).forEach(inc => {
-        const amount = incomeMode === 'monthly' ? inc.amount * 12 : inc.amount;
-        totalIncome += amount || 0;
-      });
-      
-      // คำนวณค่าใช้จ่าย
-      let totalExpenses = 0;
-      
-      // 40(1) และ 40(2) หักรวมกันไม่เกิน 100,000 บาท
-      const type1 = incomes.find(inc => inc.typeId === 1);
-      const type2 = incomes.find(inc => inc.typeId === 2);
-      
-      if (type1?.active || type2?.active) {
-        const inc1Amount = incomeMode === 'monthly' ? (type1?.amount || 0) * 12 : (type1?.amount || 0);
-        const inc2Amount = incomeMode === 'monthly' ? (type2?.amount || 0) * 12 : (type2?.amount || 0);
-        const combinedExpense = (inc1Amount + inc2Amount) * 0.5;
-        const expense = Math.min(combinedExpense, 100000);
-        totalExpenses += expense;
-      }
-      
-      // ประเภทอื่นๆ
-      incomes.filter(inc => inc.active && inc.typeId > 2).forEach(inc => {
-        const amount = incomeMode === 'monthly' ? inc.amount * 12 : inc.amount;
-        totalExpenses += amount * (inc.expenseRate || 0);
-      });
-      
-      // คำนวณเงินได้สุทธิก่อนลดหย่อน
-      const incomeBeforeDeductions = Math.max(0, totalIncome - totalExpenses);
-      
-      /***** คำนวณลดหย่อน *****/
-      let totalDeductions = 0;
-      
-      // ส่วนตัว (หักอัตโนมัติ)
-      totalDeductions += 60000;
-      
-      // คู่สมรส
-      if (deductions.spouse > 0) {
-        totalDeductions += Math.min(deductions.spouse * 60000, 60000);
-      }
-      
-      // บุตร
-      if (deductions.child > 0) {
-        totalDeductions += deductions.child * 30000;
-      }
-      
-      // พ่อแม่
-      if (deductions.parent > 0) {
-        totalDeductions += deductions.parent * 30000;
-      }
-      
-      // ประกันชีวิต + สุขภาพ (รวมกันไม่เกิน 100,000 บาท)
-      const lifeInsurance = Math.min(deductions.lifeInsurance, 100000);
-      const healthInsurance = Math.min(deductions.healthInsurance, 25000);
-      const insuranceTotal = Math.min(lifeInsurance + healthInsurance, 100000);
-      totalDeductions += insuranceTotal;
-      
-      if (lifeInsurance + healthInsurance > 100000) {
-        newErrors.push('เบี้ยประกันชีวิต+สุขภาพรวมเกิน 100,000 บาท จะหักได้ไม่เกิน 100,000 บาท');
-      }
-      
-      // ประกันบำนาญ (15% ของรายได้ ไม่เกิน 200,000 บาท)
-      const pensionMax = Math.min(totalIncome * 0.15, 200000);
-      const pensionInsurance = Math.min(deductions.pensionInsurance, pensionMax);
-      totalDeductions += pensionInsurance;
-      
-      // การลงทุน
-      const rmfMax = Math.min(totalIncome * 0.30, 500000);
-      const ssfMax = Math.min(totalIncome * 0.30, 200000);
-      
-      const rmf = Math.min(deductions.rmf, rmfMax);
-      const ssf = Math.min(deductions.ssf, ssfMax);
-      
-      totalDeductions += rmf + ssf;
-      
-      // สิทธิประโยชน์อื่นๆ
-      const mortgageInterest = Math.min(deductions.mortgageInterest, 100000);
-      const socialSecurity = Math.min(deductions.socialSecurity, 9000);
-      
-      totalDeductions += mortgageInterest + socialSecurity;
-      
-      /***** คำนวณเงินได้สุทธิและภาษี *****/
-      const netIncome = Math.max(0, incomeBeforeDeductions - totalDeductions);
-      const taxPayable = calculateTax(netIncome);
-      
-      /***** ตรวจสอบข้อผิดพลาด *****/
-      if (totalIncome > 0 && netIncome < 0) {
-        newErrors.push('ค่าลดหย่อนเกินจำนวนเงินได้ กรุณาตรวจสอบข้อมูล');
-      }
-      
-      setErrors(newErrors);
-      
-      return {
-        totalIncome,
-        totalExpenses,
-        incomeBeforeDeductions,
-        totalDeductions,
-        netIncome,
-        taxPayable
-      };
-    }, [incomes, deductions, incomeMode]);
+            <!-- System Status -->
+            <div class="bg-slate-50 rounded-lg p-3 mt-6">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-slate-600">สถานะระบบ Supabase:</span>
+                    <div class="flex items-center gap-2">
+                        <div id="supabase-status" class="w-2 h-2 rounded-full bg-green-500"></div>
+                        <span id="supabase-status-text" class="text-xs text-green-600">พร้อมใช้งาน</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    /***** หน้าจอแสดงรายได้ *****/
-    const renderIncomePage = () => {
-      return React.createElement('div', { className: "space-y-6" },
-        errors.length > 0 && errors.map((error, index) =>
-          React.createElement('div', {
-            key: index,
-            className: "p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-start gap-3 mb-4"
-          },
-            React.createElement(AlertCircle, { className: "w-5 h-5 text-yellow-600 mt-0.5" }),
-            React.createElement('p', { className: "text-sm font-medium text-yellow-800" }, error)
-          )
-        ),
+    <!-- APP CONTAINER (Hidden Initially) -->
+    <div id="app" class="mobile-container relative hidden">
         
-        React.createElement('div', { className: "card p-6" },
-          React.createElement('div', { className: "flex justify-between items-center mb-6" },
-            React.createElement('h2', { className: "text-xl font-bold text-gray-800" }, "รายได้ตามมาตรา 40"),
-            React.createElement('div', { className: "flex bg-gray-100 p-1 rounded-lg" },
-              React.createElement('button', {
-                onClick: () => setIncomeMode('yearly'),
-                className: `px-4 py-2 rounded-md ${incomeMode === 'yearly' ? 'bg-white shadow text-blue-600' : 'text-gray-600'}`
-              }, "รายปี"),
-              React.createElement('button', {
-                onClick: () => setIncomeMode('monthly'),
-                className: `px-4 py-2 rounded-md ${incomeMode === 'monthly' ? 'bg-white shadow text-blue-600' : 'text-gray-600'}`
-              }, "รายเดือน")
-            )
-          ),
-          
-          React.createElement('div', { className: "space-y-4" },
-            incomes.filter(inc => inc.active).map((inc) => {
-              const typeInfo = INCOME_TYPES.find(t => t.id === inc.typeId);
-              return React.createElement('div', { key: inc.typeId, className: "border border-gray-200 rounded-xl p-4" },
-                React.createElement('div', { className: "flex justify-between items-start mb-3" },
-                  React.createElement('div', null,
-                    React.createElement('h3', { className: "font-semibold text-gray-800" }, typeInfo.name),
-                    React.createElement('p', { className: "text-sm text-gray-500" }, typeInfo.deductionDesc)
-                  ),
-                  inc.typeId !== 1 && React.createElement('button', {
-                    onClick: () => toggleIncomeType(inc.typeId),
-                    className: "text-red-400 hover:text-red-600"
-                  }, React.createElement(X, { size: 18 }))
-                ),
-                
-                React.createElement('input', {
-                  type: "number",
-                  min: "0",
-                  step: "1000",
-                  value: inc.amount,
-                  onChange: (e) => handleIncomeChange(inc.typeId, 'amount', e.target.value),
-                  className: "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none",
-                  placeholder: "0"
-                }),
-                
-                incomeMode === 'monthly' && inc.amount > 0 && React.createElement('div', { className: "mt-2 text-sm text-gray-500" },
-                  `เทียบเท่าต่อปี: ${(inc.amount * 12).toLocaleString()} บาท`
-                )
-              );
-            }),
+        <!-- Mode Indicator Banner -->
+        <div id="mode-banner" class="sticky top-0 z-40 px-4 py-2 text-center text-xs font-medium border-b backdrop-blur-md">
+            <!-- Content set by JavaScript -->
+        </div>
+
+        <!-- Header -->
+        <header class="sticky top-8 z-30 bg-white/90 backdrop-blur-md border-b border-slate-100 px-5 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center text-white font-bold text-xs shadow-glow">
+                    TS
+                </div>
+                <h1 id="app-title" class="font-bold text-lg text-slate-800 tracking-tight">ttb trainer</h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="header-role" class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-500 font-medium">Loading...</span>
+                <button onclick="logout()" class="text-slate-400 hover:text-red-500 transition-colors">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- MAIN CONTENT AREA -->
+        <main id="main-content" class="p-5 space-y-6">
+            <!-- Content Injected via JS -->
+        </main>
+
+        <!-- Floating Action Button (Add Schedule) -->
+        <button onclick="navigateTo('create')" id="fab-add" class="fixed bottom-24 right-5 w-14 h-14 bg-gradient-primary rounded-full shadow-glow text-white flex items-center justify-center text-xl z-30 hover:scale-105 transition-transform active:scale-95">
+            <i class="fa-solid fa-plus"></i>
+        </button>
+
+        <!-- Bottom Navigation -->
+        <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-2 py-2 z-50 max-w-[480px] mx-auto">
+            <div class="flex justify-around items-center">
+                <button onclick="navigateTo('dashboard')" class="nav-item flex flex-col items-center gap-1 p-2 text-slate-400 hover:text-cyan-500 transition-colors w-16" data-target="dashboard">
+                    <i class="fa-solid fa-house text-lg"></i>
+                    <span class="text-[10px] font-medium">Home</span>
+                </button>
+                <button onclick="navigateTo('schedules')" class="nav-item flex flex-col items-center gap-1 p-2 text-slate-400 hover:text-cyan-500 transition-colors w-16" data-target="schedules">
+                    <i class="fa-regular fa-calendar-days text-lg"></i>
+                    <span class="text-[10px] font-medium">ตาราง</span>
+                </button>
+                <button onclick="navigateTo('availability')" class="nav-item flex flex-col items-center gap-1 p-2 text-slate-400 hover:text-cyan-500 transition-colors w-16" data-target="availability">
+                    <i class="fa-solid fa-users-viewfinder text-lg"></i>
+                    <span class="text-[10px] font-medium">วันว่าง</span>
+                </button>
+                <button onclick="navigateTo('summary')" class="nav-item flex flex-col items-center gap-1 p-2 text-slate-400 hover:text-cyan-500 transition-colors w-16" data-target="summary">
+                    <i class="fa-brands fa-line text-lg"></i>
+                    <span class="text-[10px] font-medium">สรุป</span>
+                </button>
+                <button onclick="navigateTo('profile')" class="nav-item flex flex-col items-center gap-1 p-2 text-slate-400 hover:text-cyan-500 transition-colors w-16" data-target="profile">
+                    <i class="fa-regular fa-user text-lg"></i>
+                    <span class="text-[10px] font-medium">ฉัน</span>
+                </button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Login Screen -->
+    <div id="login-screen" class="mobile-container flex flex-col justify-center items-center p-8 bg-white absolute top-0 left-0 right-0 z-40 hidden">
+        <div class="w-20 h-20 rounded-2xl bg-gradient-primary flex items-center justify-center text-white font-bold text-3xl shadow-glow mb-6">
+            TS
+        </div>
+        <h2 id="login-title" class="text-2xl font-bold text-slate-800 mb-1">ยินดีต้อนรับ</h2>
+        <p id="login-subtitle" class="text-slate-400 text-sm mb-8">เข้าสู่ระบบ ttb trainer task</p>
+
+        <form id="login-form" class="w-full space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1 ml-1">อีเมล</label>
+                <input type="email" id="email" required class="input-rounded w-full px-4 py-3 bg-slate-50 text-sm" placeholder="example@ttb.com">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1 ml-1">รหัสผ่าน</label>
+                <input type="password" id="password" required class="input-rounded w-full px-4 py-3 bg-slate-50 text-sm" placeholder="••••••••">
+            </div>
             
-            React.createElement('div', { className: "pt-4 border-t border-gray-200" },
-              React.createElement('p', { className: "text-sm text-gray-500 mb-3" }, "เพิ่มรายได้ประเภทอื่น:"),
-              React.createElement('div', { className: "flex flex-wrap gap-2" },
-                incomes.filter(i => !i.active && i.typeId !== 1).map(inc => {
-                  const info = INCOME_TYPES.find(t => t.id === inc.typeId);
-                  return React.createElement('button', {
-                    key: inc.typeId,
-                    onClick: () => toggleIncomeType(inc.typeId),
-                    className: "flex items-center gap-1 px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-600 hover:border-blue-500 hover:text-blue-600"
-                  }, React.createElement(Plus, { size: 14 }), info.name.split(' ')[0]);
-                })
-              )
-            )
-          )
-        )
-      );
-    };
-
-    /***** หน้าจอแสดงลดหย่อน *****/
-    const renderDeductionPage = () => {
-      return React.createElement('div', { className: "space-y-6" },
-        React.createElement('div', { className: "card p-6" },
-          React.createElement('h2', { className: "text-xl font-bold text-gray-800 mb-6" }, "ค่าลดหย่อนภาษี"),
-          
-          React.createElement('div', { className: "space-y-8" },
-            DEDUCTION_CATEGORIES.map(category =>
-              React.createElement('div', { key: category.id },
-                React.createElement('div', { className: "flex items-center gap-2 mb-4" },
-                  React.createElement(category.icon, { className: "w-5 h-5 text-blue-600" }),
-                  React.createElement('h3', { className: "text-lg font-semibold text-gray-800" }, category.title)
-                ),
-                
-                React.createElement('div', { className: "space-y-4" },
-                  category.items.map(item => {
-                    const currentValue = deductions[item.key] || 0;
-                    return React.createElement('div', { key: item.key, className: "flex flex-col md:flex-row md:items-center justify-between gap-2 p-4 bg-gray-50 rounded-lg" },
-                      React.createElement('div', { className: "flex-1" },
-                        React.createElement('div', { className: "flex items-center gap-2 mb-1" },
-                          React.createElement('span', { className: "font-medium text-gray-700" }, item.label),
-                          item.max && React.createElement('span', { className: "text-xs text-gray-500" }, `(สูงสุด ${item.max.toLocaleString()} บาท)`)
-                        ),
-                        React.createElement('p', { className: "text-sm text-gray-500" }, item.desc)
-                      ),
-                      
-                      React.createElement('div', { className: "flex items-center gap-2" },
-                        React.createElement('input', {
-                          type: "number",
-                          min: "0",
-                          value: currentValue,
-                          onChange: (e) => setDeductions({ ...deductions, [item.key]: Number(e.target.value) || 0 }),
-                          className: "w-32 px-3 py-2 border border-gray-300 rounded-lg text-right focus:ring-2 focus:ring-blue-500 outline-none",
-                          placeholder: "0"
-                        }),
-                        React.createElement('span', { className: "text-gray-500" }, "บาท")
-                      )
-                    );
-                  })
-                )
-              )
-            )
-          )
-        )
-      );
-    };
-
-    /***** หน้าจอดashboard *****/
-    const renderDashboard = () => {
-      const results = calculateResults;
-      
-      // หาว่าเงินได้สุทธิอยู่ช่วงไหน
-      const currentBracket = TAX_BRACKETS_2023.find(bracket => 
-        results.netIncome > bracket.min && results.netIncome <= bracket.max
-      );
-      
-      return React.createElement('div', { className: "space-y-6" },
-        React.createElement('div', { className: "credit-card p-6 relative overflow-hidden" },
-          React.createElement('div', { className: "relative z-10" },
-            React.createElement('div', { className: "flex justify-between items-start mb-8" },
-              React.createElement('div', null,
-                React.createElement('p', { className: "text-white/80 text-sm" }, "Tax Calculator 2566"),
-                React.createElement('h2', { className: "text-2xl font-bold text-white" }, "คำนวณภาษีเงินได้บุคคลธรรมดา")
-              ),
-              React.createElement(Calculator, { size: 32, className: "text-white/80" })
-            ),
-            React.createElement('div', { className: "mb-6" },
-              React.createElement('p', { className: "text-white/80 text-sm mb-1" }, "รายได้สุทธิ (หลังหักค่าใช้จ่ายและลดหย่อน)" ),
-              React.createElement('h1', { className: "text-4xl font-bold text-white" }, 
-                results.netIncome.toLocaleString() + " ฿"
-              )
-            ),
-            React.createElement('div', { className: "grid grid-cols-2 gap-4" },
-              React.createElement('div', null,
-                React.createElement('p', { className: "text-white/80 text-xs mb-1" }, "รายได้รวม" ),
-                React.createElement('p', { className: "text-lg font-semibold text-white" }, results.totalIncome.toLocaleString() + " ฿")
-              ),
-              React.createElement('div', null,
-                React.createElement('p', { className: "text-white/80 text-xs mb-1" }, "ภาษีต้องชำระ" ),
-                React.createElement('p', { className: "text-lg font-semibold text-white" }, results.taxPayable.toLocaleString() + " ฿")
-              )
-            )
-          )
-        ),
+            <!-- Demo Accounts Info (UAT Mode) -->
+            <div id="demo-accounts-info" class="bg-amber-50 border border-amber-200 rounded-lg p-3 hidden">
+                <p class="text-xs font-medium text-amber-800 mb-1">บัญชีตัวอย่างสำหรับทดสอบ:</p>
+                <ul class="text-xs text-amber-700 space-y-0.5">
+                    <li>• admin@ttb.com / admin123 (Admin)</li>
+                    <li>• master@ttb.com / master123 (Master)</li>
+                    <li>• trainer1@ttb.com / trainer123 (Trainer)</li>
+                    <li>• trainer2@ttb.com / trainer123 (Trainer)</li>
+                </ul>
+            </div>
+            
+            <button type="submit" class="w-full bg-gradient-primary text-white font-semibold py-3.5 rounded-xl shadow-glow active:scale-95 transition-transform mt-2">
+                เข้าสู่ระบบ
+            </button>
+            <div id="login-error" class="text-red-500 text-xs text-center hidden mt-2"></div>
+        </form>
         
-        React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-2 gap-6" },
-          React.createElement('div', { className: "card p-6" },
-            React.createElement('h3', { className: "text-lg font-bold text-gray-800 mb-4" }, "สรุปการคำนวณ"),
-            React.createElement('div', { className: "space-y-3" },
-              React.createElement('div', { className: "flex justify-between" },
-                React.createElement('span', { className: "text-gray-600" }, "รายได้รวม"),
-                React.createElement('span', { className: "font-semibold" }, results.totalIncome.toLocaleString() + " บาท")
-              ),
-              React.createElement('div', { className: "flex justify-between" },
-                React.createElement('span', { className: "text-gray-600" }, "หักค่าใช้จ่ายมาตรา 40"),
-                React.createElement('span', { className: "text-red-600 font-semibold" }, "-" + results.totalExpenses.toLocaleString() + " บาท")
-              ),
-              React.createElement('div', { className: "flex justify-between border-t border-gray-200 pt-2" },
-                React.createElement('span', { className: "text-gray-800 font-medium" }, "เงินได้พึงประเมิน"),
-                React.createElement('span', { className: "font-bold" }, results.incomeBeforeDeductions.toLocaleString() + " บาท")
-              ),
-              React.createElement('div', { className: "flex justify-between" },
-                React.createElement('span', { className: "text-gray-600" }, "หักค่าลดหย่อนทั้งหมด"),
-                React.createElement('span', { className: "text-red-600 font-semibold" }, "-" + results.totalDeductions.toLocaleString() + " บาท")
-              ),
-              React.createElement('div', { className: "flex justify-between border-t border-gray-200 pt-2" },
-                React.createElement('span', { className: "text-gray-800 font-medium" }, "เงินได้สุทธิ"),
-                React.createElement('span', { className: "font-bold text-blue-600" }, results.netIncome.toLocaleString() + " บาท")
-              ),
-              React.createElement('div', { className: "flex justify-between border-t-2 border-gray-300 pt-2 mt-2" },
-                React.createElement('span', { className: "text-gray-800 font-bold" }, "ภาษีต้องชำระ"),
-                React.createElement('span', { className: "text-xl font-bold text-red-600" }, results.taxPayable.toLocaleString() + " บาท")
-              )
-            )
-          ),
-          
-          React.createElement('div', { className: "card p-6" },
-            React.createElement('h3', { className: "text-lg font-bold text-gray-800 mb-4" }, "อัตราภาษีแบบขั้นบันได 2566"),
-            React.createElement('div', { className: "space-y-2" },
-              TAX_BRACKETS_2023.map((bracket, index) =>
-                React.createElement('div', { 
-                  key: index, 
-                  className: `flex justify-between p-2 rounded ${currentBracket === bracket ? 'bg-blue-50' : ''}` 
+        <!-- Back to Mode Selection -->
+        <button onclick="backToModeSelection()" class="mt-6 text-slate-400 hover:text-slate-600 text-sm">
+            <i class="fa-solid fa-arrow-left mr-1"></i> กลับไปเลือกโหมด
+        </button>
+    </div>
+
+    <!-- Modals / Overlays -->
+    <div id="loading-overlay" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-[60] flex items-center justify-center hidden">
+        <div class="loader"></div>
+    </div>
+
+    <script>
+        // ==========================================
+        // GLOBAL CONFIGURATION & STATE
+        // ==========================================
+        const SYSTEM_CONFIG = {
+            production: {
+                name: 'ttb trainer (Production)',
+                supabase: {
+                    url: 'https://qazlgcffcskuswcgpxnw.supabase.co',
+                    anon_key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFhemxnY2ZmY3NrdXN3Y2dweG53Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MjA4MjUsImV4cCI6MjA4MDQ5NjgyNX0.HrNTVtc3SQPBCvkzU2L5GS28hxYOS-DLxyiELNMEmrY',
+                    storage_bucket: 'avatars'
                 },
-                  React.createElement('span', { className: "text-sm" },
-                    bracket.max === Infinity ? 
-                      `เกิน ${bracket.min.toLocaleString()} บาท` :
-                      `${bracket.min.toLocaleString()} - ${bracket.max.toLocaleString()} บาท`
-                  ),
-                  React.createElement('span', { className: "font-medium" }, `อัตรา ${(bracket.rate * 100)}%`)
-                )
-              )
-            ),
-            React.createElement('div', { className: "mt-4 p-3 bg-gray-50 rounded-lg" },
-              currentBracket && React.createElement('p', { className: "text-sm text-gray-600" },
-                "เงินได้สุทธิของคุณอยู่ในอัตราภาษี: ",
-                React.createElement('span', { className: "font-semibold" }, (currentBracket.rate * 100) + "%")
-              )
-            )
-          )
-        )
-      );
-    };
+                features: {
+                    real_data: true,
+                    live_auth: true,
+                    real_storage: false // ไม่จำเป็นต้องมีตอนนี้
+                }
+            },
+            uat: {
+                name: 'ttb trainer (UAT/Mockup)',
+                supabase: {
+                    url: 'https://mock.local',
+                    anon_key: 'mock-key',
+                    storage_bucket: 'mock-avatars'
+                },
+                features: {
+                    real_data: false,
+                    live_auth: false,
+                    real_storage: false
+                },
+                mock_data: {
+                    accounts: [
+                        {
+                            id: 'admin-001',
+                            email: 'admin@ttb.com',
+                            password: 'admin123',
+                            display_name: 'Admin User',
+                            role: 'Admin',
+                            team: 'Training Specialist',
+                            avatar_url: null
+                        },
+                        {
+                            id: 'master-001',
+                            email: 'master@ttb.com',
+                            password: 'master123',
+                            display_name: 'Master Admin',
+                            role: 'Master',
+                            team: 'Training Specialist',
+                            avatar_url: null
+                        },
+                        {
+                            id: 'trainer-001',
+                            email: 'trainer1@ttb.com',
+                            password: 'trainer123',
+                            display_name: 'สมชาย ใจดี',
+                            role: 'Trainer',
+                            team: 'Training Specialist',
+                            avatar_url: null
+                        },
+                        {
+                            id: 'trainer-002',
+                            email: 'trainer2@ttb.com',
+                            password: 'trainer123',
+                            display_name: 'สุนิสา รักงาน',
+                            role: 'Trainer',
+                            team: 'Mandatory',
+                            avatar_url: null
+                        },
+                        {
+                            id: 'trainer-003',
+                            email: 'trainer3@ttb.com',
+                            password: 'trainer123',
+                            display_name: 'อนุชา สมบูรณ์',
+                            role: 'Trainer',
+                            team: 'Training Specialist',
+                            avatar_url: null
+                        }
+                    ],
+                    schedules: [
+                        {
+                            id: 'sched-001',
+                            date: new Date().toISOString().split('T')[0],
+                            start_time: '09:00',
+                            end_time: '12:00',
+                            trainer_id: 'trainer-001',
+                            partner: 'ttb',
+                            method: 'f2f',
+                            course_detail: 'Role-play การขายบัตรเครดิตขั้นสูง',
+                            location: 'SYM Office ชั้น 5',
+                            team_group: 'Training Specialist'
+                        },
+                        {
+                            id: 'sched-002',
+                            date: new Date().toISOString().split('T')[0],
+                            start_time: '13:00',
+                            end_time: '16:00',
+                            trainer_id: 'trainer-002',
+                            partner: 'PD',
+                            method: 'Online',
+                            course_detail: 'อัพเดทผลิตภัณฑ์ประกันใหม่',
+                            location: 'Zoom Meeting',
+                            team_group: 'Mandatory'
+                        },
+                        {
+                            id: 'sched-003',
+                            date: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
+                            start_time: '10:00',
+                            end_time: '15:00',
+                            trainer_id: 'trainer-001',
+                            partner: 'TTT',
+                            method: 'f2f',
+                            course_detail: 'Workshop การบริการลูกค้า',
+                            location: 'Head Office ห้องประชุม A',
+                            team_group: 'Training Specialist'
+                        }
+                    ]
+                }
+            }
+        };
 
-    /***** หน้าจอข้อมูลกฎหมาย *****/
-    const renderInfoPage = () => {
-      return React.createElement('div', { className: "card p-6" },
-        React.createElement('h2', { className: "text-xl font-bold text-gray-800 mb-4" }, "ข้อมูลกฎหมายภาษี 2566"),
-        React.createElement('div', { className: "space-y-4" },
-          React.createElement('div', { className: "p-4 bg-blue-50 rounded-lg" },
-            React.createElement('h3', { className: "font-semibold text-blue-800 mb-2" }, "หลักเกณฑ์สำคัญ"),
-            React.createElement('ul', { className: "list-disc list-inside text-sm text-blue-700 space-y-1" },
-              React.createElement('li', null, "เงินได้ประเภท 40(1) และ 40(2) หักค่าใช้จ่ายรวมกันไม่เกิน 100,000 บาท"),
-              React.createElement('li', null, "ส่วนตัวหักอัตโนมัติ 60,000 บาททุกคน"),
-              React.createElement('li', null, "ประกันชีวิต+สุขภาพรวมกันไม่เกิน 100,000 บาท"),
-              React.createElement('li', null, "RMF/SSF/PVD รวมกันไม่เกิน 500,000 บาท")
-            )
-          ),
-          React.createElement('div', { className: "p-4 bg-green-50 rounded-lg" },
-            React.createElement('h3', { className: "font-semibold text-green-800 mb-2" }, "แหล่งข้อมูลอ้างอิง"),
-            React.createElement('ul', { className: "text-sm text-green-700 space-y-1" },
-              React.createElement('li', null, "ประมวลรัษฎากร มาตรา 40, 47"),
-              React.createElement('li', null, "กรมสรรพากร ประกาศปี 2566"),
-              React.createElement('li', null, "ข้อมูล ณ วันที่ 1 มกราคม 2567")
-            )
-          )
-        )
-      );
-    };
+        // Global State
+        let currentMode = null; // 'production' or 'uat'
+        let currentUser = null;
+        let userProfile = null;
+        let allProfiles = [];
+        let schedulesCache = [];
+        let currentView = 'dashboard';
+        let supabaseClient = null;
 
-    return React.createElement('div', { className: "min-h-screen bg-gray-50" },
-      React.createElement('div', { className: "max-w-6xl mx-auto px-4 py-6" },
-        React.createElement('header', { className: "mb-8" },
-          React.createElement('div', { className: "flex justify-between items-center mb-6" },
-            React.createElement('div', null,
-              React.createElement('h1', { className: "text-2xl font-bold gradient-text" }, "TAX Calculator 2566"),
-              React.createElement('p', { className: "text-gray-600" }, "คำนวณภาษีเงินได้บุคคลธรรมดาตามกฎหมายปัจจุบัน")
-            ),
-            React.createElement('div', { className: "text-right" },
-              React.createElement('p', { className: "text-sm text-gray-500" }, "ประจำปี"),
-              React.createElement('p', { className: "font-bold text-blue-600" }, "พ.ศ. 2566-2567")
-            )
-          )
-        ),
+        // Constants
+        const TEAMS = {
+            'Training Specialist': ['ttb_yj', 'ttb_tt', 'ttb_pp', 'ttb_wc', 'ttb_as', 'ttb_nj'],
+            'Mandatory': ['ttb_ap', 'ttb_np', 'ttb_pn', 'ttb_sd', 'ttb_sk']
+        };
+
+        const PARTNERS = ['ttb', 'PD', 'TTT', 'PRU'];
+
+        // ==========================================
+        // MODE SELECTION FUNCTIONS
+        // ==========================================
+        function selectMode(mode) {
+            currentMode = mode;
+            localStorage.setItem('ttb-trainer-mode', mode);
+            
+            if (mode === 'production') {
+                // Initialize Production Supabase
+                const config = SYSTEM_CONFIG.production;
+                supabaseClient = window.supabase.createClient(config.supabase.url, config.supabase.anon_key);
+                showLoginScreen();
+            } else if (mode === 'uat') {
+                // Initialize UAT Mock System
+                initializeUATSystem();
+                showLoginScreen();
+            }
+        }
+
+        function toggleUATMode() {
+            const passcodeSection = document.getElementById('passcode-section');
+            const uatButton = document.querySelector('button[onclick="toggleUATMode()"]');
+            
+            if (passcodeSection.classList.contains('hidden')) {
+                passcodeSection.classList.remove('hidden');
+                uatButton.textContent = 'ยืนยันรหัสผ่าน';
+            } else {
+                verifyPasscode();
+            }
+        }
+
+        function verifyPasscode() {
+            const passcode = document.getElementById('uat-passcode').value;
+            const errorEl = document.getElementById('passcode-error');
+            
+            if (passcode === '0229') {
+                selectMode('uat');
+            } else {
+                errorEl.textContent = 'รหัสผ่านไม่ถูกต้อง กรุณากรอก 0229';
+                errorEl.classList.remove('hidden');
+            }
+        }
+
+        function togglePasscodeVisibility() {
+            const passcodeInput = document.getElementById('uat-passcode');
+            const eyeIcon = document.getElementById('eye-icon');
+            
+            if (passcodeInput.type === 'password') {
+                passcodeInput.type = 'text';
+                eyeIcon.className = 'fa-solid fa-eye-slash';
+            } else {
+                passcodeInput.type = 'password';
+                eyeIcon.className = 'fa-solid fa-eye';
+            }
+        }
+
+        function backToModeSelection() {
+            // Reset state
+            currentMode = null;
+            currentUser = null;
+            userProfile = null;
+            schedulesCache = [];
+            
+            // Show mode selection, hide others
+            document.getElementById('mode-selection').classList.remove('hidden');
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('app').classList.add('hidden');
+        }
+
+        // ==========================================
+        // UAT MOCK SYSTEM
+        // ==========================================
+        function initializeUATSystem() {
+            // Create mock Supabase client
+            supabaseClient = {
+                auth: {
+                    getSession: async () => {
+                        // Check if we have a mock session
+                        const mockSession = localStorage.getItem('uat-mock-session');
+                        if (mockSession) {
+                            const sessionData = JSON.parse(mockSession);
+                            return { 
+                                data: { session: sessionData }, 
+                                error: null 
+                            };
+                        }
+                        return { data: { session: null }, error: null };
+                    },
+                    signInWithPassword: async ({ email, password }) => {
+                        const accounts = SYSTEM_CONFIG.uat.mock_data.accounts;
+                        const account = accounts.find(acc => 
+                            acc.email === email && acc.password === password
+                        );
+                        
+                        if (account) {
+                            // Create mock session
+                            const mockSession = {
+                                user: {
+                                    id: account.id,
+                                    email: account.email,
+                                    user_metadata: { full_name: account.display_name }
+                                },
+                                access_token: 'mock-token-' + Date.now()
+                            };
+                            
+                            // Store session
+                            localStorage.setItem('uat-mock-session', JSON.stringify(mockSession));
+                            
+                            return {
+                                data: {
+                                    user: mockSession.user,
+                                    session: mockSession
+                                },
+                                error: null
+                            };
+                        } else {
+                            return {
+                                data: null,
+                                error: { message: 'Invalid login credentials' }
+                            };
+                        }
+                    },
+                    signOut: async () => {
+                        localStorage.removeItem('uat-mock-session');
+                        backToModeSelection();
+                        return { error: null };
+                    }
+                },
+                from: (tableName) => {
+                    return {
+                        select: (columns) => {
+                            return {
+                                eq: (column, value) => {
+                                    return {
+                                        single: async () => {
+                                            if (tableName === 'profiles') {
+                                                const accounts = SYSTEM_CONFIG.uat.mock_data.accounts;
+                                                const account = accounts.find(acc => acc[column] === value);
+                                                return { data: account || null, error: null };
+                                            }
+                                            return { data: null, error: null };
+                                        }
+                                    };
+                                },
+                                order: () => {
+                                    return {
+                                        then: (callback) => {
+                                            let data = [];
+                                            if (tableName === 'profiles') {
+                                                data = SYSTEM_CONFIG.uat.mock_data.accounts;
+                                            } else if (tableName === 'schedules') {
+                                                data = SYSTEM_CONFIG.uat.mock_data.schedules.map(sched => {
+                                                    const account = SYSTEM_CONFIG.uat.mock_data.accounts
+                                                        .find(acc => acc.id === sched.trainer_id);
+                                                    return {
+                                                        ...sched,
+                                                        profiles: account || null
+                                                    };
+                                                });
+                                            }
+                                            setTimeout(() => callback({ data, error: null }), 100);
+                                        }
+                                    };
+                                }
+                            };
+                        },
+                        insert: async (data) => {
+                            if (tableName === 'schedules') {
+                                const newSchedule = {
+                                    id: 'sched-' + Date.now(),
+                                    ...data[0],
+                                    team_group: 'Training Specialist' // Default
+                                };
+                                
+                                // Add to mock data
+                                SYSTEM_CONFIG.uat.mock_data.schedules.push(newSchedule);
+                                
+                                // Update schedules cache
+                                const account = SYSTEM_CONFIG.uat.mock_data.accounts
+                                    .find(acc => acc.id === newSchedule.trainer_id);
+                                schedulesCache.push({
+                                    ...newSchedule,
+                                    profiles: account || null
+                                });
+                            }
+                            return { error: null };
+                        },
+                        delete: async () => {
+                            return {
+                                eq: (column, value) => {
+                                    if (tableName === 'schedules') {
+                                        // Remove from mock data
+                                        const index = SYSTEM_CONFIG.uat.mock_data.schedules
+                                            .findIndex(s => s[column] === value);
+                                        if (index > -1) {
+                                            SYSTEM_CONFIG.uat.mock_data.schedules.splice(index, 1);
+                                        }
+                                        
+                                        // Remove from cache
+                                        schedulesCache = schedulesCache.filter(s => s[column] !== value);
+                                    }
+                                    return { error: null };
+                                }
+                            };
+                        }
+                    };
+                }
+            };
+        }
+
+        // ==========================================
+        // UI MANAGEMENT
+        // ==========================================
+        function showLoginScreen() {
+            // Hide mode selection
+            document.getElementById('mode-selection').classList.add('hidden');
+            
+            // Update login screen based on mode
+            const loginTitle = document.getElementById('login-title');
+            const loginSubtitle = document.getElementById('login-subtitle');
+            const demoInfo = document.getElementById('demo-accounts-info');
+            
+            if (currentMode === 'production') {
+                loginTitle.textContent = 'ยินดีต้อนรับ';
+                loginSubtitle.textContent = 'เข้าสู่ระบบ ttb trainer task (Production)';
+                demoInfo.classList.add('hidden');
+            } else {
+                loginTitle.textContent = 'UAT/Mockup Mode';
+                loginSubtitle.textContent = 'เข้าสู่ระบบด้วยบัญชีตัวอย่าง';
+                demoInfo.classList.remove('hidden');
+            }
+            
+            // Show login screen
+            document.getElementById('login-screen').classList.remove('hidden');
+        }
+
+        function showApp() {
+            // Hide login screen
+            document.getElementById('login-screen').classList.add('hidden');
+            
+            // Update app title and banner
+            const appTitle = document.getElementById('app-title');
+            const modeBanner = document.getElementById('mode-banner');
+            
+            if (currentMode === 'production') {
+                appTitle.innerHTML = 'ttb trainer <span class="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full ml-2">PRODUCTION</span>';
+                modeBanner.className = 'sticky top-0 z-40 px-4 py-2 text-center text-xs font-medium border-b backdrop-blur-md bg-green-50 text-green-700 border-green-200';
+                modeBanner.innerHTML = '<i class="fa-solid fa-circle-check mr-1"></i> คุณกำลังใช้งานระบบ Production จริง';
+            } else {
+                appTitle.innerHTML = 'ttb trainer <span class="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full ml-2">UAT/MOCKUP</span>';
+                modeBanner.className = 'sticky top-0 z-40 px-4 py-2 text-center text-xs font-medium border-b backdrop-blur-md bg-orange-50 text-orange-700 border-orange-200';
+                modeBanner.innerHTML = '<i class="fa-solid fa-flask mr-1"></i> คุณกำลังใช้งานระบบ UAT/Mockup | ข้อมูลทั้งหมดเป็นตัวอย่าง';
+            }
+            
+            // Show app
+            document.getElementById('app').classList.remove('hidden');
+            
+            // Initialize navigation
+            navigateTo('dashboard');
+        }
+
+        // ==========================================
+        // AUTHENTICATION
+        // ==========================================
+        async function initApp() {
+            showLoading(true);
+            
+            if (currentMode === 'production') {
+                // Production: Check Supabase session
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                
+                if (session) {
+                    currentUser = session.user;
+                    await fetchUserProfile();
+                    await loadAllData();
+                    showApp();
+                } else {
+                    showLoginScreen();
+                }
+            } else {
+                // UAT: Check mock session
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                
+                if (session) {
+                    currentUser = session.user;
+                    await fetchUserProfile();
+                    await loadAllData();
+                    showApp();
+                } else {
+                    showLoginScreen();
+                }
+            }
+            
+            showLoading(false);
+        }
+
+        async function login(email, password) {
+            showLoading(true);
+            
+            try {
+                const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                
+                if (error) {
+                    throw error;
+                }
+                
+                currentUser = data.user;
+                await fetchUserProfile();
+                await loadAllData();
+                showApp();
+            } catch (error) {
+                let errorMessage = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+                
+                if (currentMode === 'uat') {
+                    errorMessage += "\n\nบัญชีตัวอย่าง:\nadmin@ttb.com / admin123\nmaster@ttb.com / master123\ntrainer1@ttb.com / trainer123";
+                }
+                
+                document.getElementById('login-error').textContent = errorMessage;
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+            
+            showLoading(false);
+        }
+
+        async function logout() {
+            if (currentMode === 'production') {
+                await supabaseClient.auth.signOut();
+            } else {
+                await supabaseClient.auth.signOut();
+            }
+            backToModeSelection();
+        }
+
+        // ==========================================
+        // DATA OPERATIONS
+        // ==========================================
+        async function fetchUserProfile() {
+            if (currentMode === 'production') {
+                const { data, error } = await supabaseClient
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', currentUser.id)
+                    .single();
+                
+                if (data) {
+                    userProfile = data;
+                    document.getElementById('header-role').textContent = userProfile.role;
+                    
+                    if (['Master', 'Admin'].includes(userProfile.role)) {
+                        const { data: profiles } = await supabaseClient.from('profiles').select('*');
+                        allProfiles = profiles || [];
+                    }
+                }
+            } else {
+                // UAT Mode: Get from mock data
+                const accounts = SYSTEM_CONFIG.uat.mock_data.accounts;
+                const account = accounts.find(acc => acc.id === currentUser.id);
+                
+                if (account) {
+                    userProfile = account;
+                    document.getElementById('header-role').textContent = userProfile.role;
+                    
+                    if (['Master', 'Admin'].includes(userProfile.role)) {
+                        allProfiles = accounts;
+                    }
+                }
+            }
+        }
+
+        async function loadAllData() {
+            if (currentMode === 'production') {
+                const { data, error } = await supabaseClient
+                    .from('schedules')
+                    .select(`
+                        *,
+                        profiles:trainer_id (display_name, avatar_url, team)
+                    `)
+                    .order('start_time', { ascending: true });
+                
+                if (data) {
+                    schedulesCache = data;
+                }
+            } else {
+                // UAT Mode: Load mock schedules
+                schedulesCache = SYSTEM_CONFIG.uat.mock_data.schedules.map(sched => {
+                    const account = SYSTEM_CONFIG.uat.mock_data.accounts
+                        .find(acc => acc.id === sched.trainer_id);
+                    return {
+                        ...sched,
+                        profiles: account || null
+                    };
+                });
+            }
+        }
+
+        async function saveSchedule(formData) {
+            showLoading(true);
+            
+            // Set team based on role
+            if (userProfile.role === 'Trainer') {
+                formData.trainer_id = userProfile.id;
+                formData.team_group = userProfile.team;
+            } else {
+                // For Admin/Master, find team of selected trainer
+                let trainer = null;
+                if (currentMode === 'production') {
+                    trainer = allProfiles.find(p => p.id === formData.trainer_id);
+                } else {
+                    trainer = SYSTEM_CONFIG.uat.mock_data.accounts
+                        .find(acc => acc.id === formData.trainer_id);
+                }
+                if (trainer) formData.team_group = trainer.team;
+            }
+
+            // Save to appropriate system
+            const { error } = await supabaseClient.from('schedules').insert([formData]);
+            
+            if (error) {
+                alert('เกิดข้อผิดพลาด: ' + error.message);
+            } else {
+                alert('บันทึกเรียบร้อย');
+                await loadAllData();
+                navigateTo('schedules');
+            }
+            showLoading(false);
+        }
+
+        async function deleteSchedule(id) {
+            if(!confirm('ยืนยันการลบ?')) return;
+            
+            const { error } = await supabaseClient.from('schedules').delete().eq('id', id);
+            if (!error) {
+                await loadAllData();
+                renderView();
+            }
+        }
+
+        // ==========================================
+        // UI NAVIGATION & ROUTING
+        // ==========================================
+        function navigateTo(view, params = null) {
+            currentView = view;
+            
+            // Update Bottom Nav Active State
+            document.querySelectorAll('.nav-item').forEach(el => {
+                const icon = el.querySelector('i');
+                const text = el.querySelector('span');
+                
+                if (el.dataset.target === view) {
+                    icon.classList.remove('text-slate-400');
+                    icon.classList.add('text-transparent', 'bg-clip-text', 'bg-gradient-primary');
+                    text.classList.remove('text-slate-400');
+                    text.classList.add('text-cyan-600');
+                } else {
+                    icon.classList.add('text-slate-400');
+                    icon.classList.remove('text-transparent', 'bg-clip-text', 'bg-gradient-primary');
+                    text.classList.add('text-slate-400');
+                    text.classList.remove('text-cyan-600');
+                }
+            });
+
+            // Hide FAB on create or profile pages
+            const fab = document.getElementById('fab-add');
+            if (['create', 'profile', 'summary'].includes(view)) {
+                fab.classList.add('hidden');
+            } else {
+                fab.classList.remove('hidden');
+            }
+
+            renderView(params);
+        }
+
+        function renderView(params) {
+            const container = document.getElementById('main-content');
+            container.innerHTML = '';
+
+            switch (currentView) {
+                case 'dashboard':
+                    renderDashboard(container);
+                    break;
+                case 'schedules':
+                    renderScheduleList(container);
+                    break;
+                case 'create':
+                    renderCreateForm(container);
+                    break;
+                case 'summary':
+                    renderSummary(container);
+                    break;
+                case 'profile':
+                    renderProfile(container);
+                    break;
+                case 'availability':
+                    renderAvailability(container);
+                    break;
+            }
+        }
+
+        // ==========================================
+        // VIEW RENDERERS
+        // ==========================================
         
-        React.createElement('div', { className: "mb-6" },
-          React.createElement('div', { className: "flex overflow-x-auto bg-gray-100 p-1 rounded-xl" },
-            [
-              { id: 'income', label: 'รายได้', icon: DollarSign },
-              { id: 'deduction', label: 'ลดหย่อน', icon: FileText },
-              { id: 'dashboard', label: 'ผลการคำนวณ', icon: Calculator },
-              { id: 'info', label: 'ข้อมูลกฎหมาย', icon: BookOpen },
-            ].map(tab =>
-              React.createElement('button', {
-                key: tab.id,
-                onClick: () => setActiveTab(tab.id),
-                className: `flex items-center gap-2 px-4 py-3 rounded-lg whitespace-nowrap ${activeTab === tab.id ? 'tab-active' : 'text-gray-600 hover:bg-gray-200'}`
-              },
-                React.createElement(tab.icon, { size: 18 }),
-                React.createElement('span', { className: "font-medium" }, tab.label)
-              )
-            )
-          )
-        ),
-        
-        React.createElement('main', null,
-          activeTab === 'income' && renderIncomePage(),
-          activeTab === 'deduction' && renderDeductionPage(),
-          activeTab === 'dashboard' && renderDashboard(),
-          activeTab === 'info' && renderInfoPage()
-        ),
-        
-        React.createElement('footer', { className: "mt-8 pt-6 border-t border-gray-200 text-center text-gray-500 text-sm" },
-          React.createElement('p', null, "คำนวณภาษีเงินได้บุคคลธรรมดาตามกฎหมายไทย"),
-          React.createElement('p', { className: "mt-1" }, "© 2567 ข้อมูลอ้างอิงจากกรมสรรพากร")
-        )
-      )
-    );
-  }
+        // 1. DASHBOARD
+        function renderDashboard(container) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const todayTasks = schedulesCache.filter(s => s.date === todayStr);
+            
+            const visibleTasks = (userProfile.role === 'Trainer') 
+                ? todayTasks.filter(s => s.trainer_id === userProfile.id)
+                : todayTasks;
 
-  // Mount React app
-  const rootElement = document.getElementById('root');
-  const root = createRoot(rootElement);
-  root.render(React.createElement(App));
+            const onlineCount = visibleTasks.filter(t => t.method === 'Online').length;
+            const f2fCount = visibleTasks.filter(t => t.method === 'f2f').length;
 
-  </script>
+            let html = `
+                <!-- Stats Card -->
+                <div class="w-full h-40 rounded-2xl bg-gradient-primary p-6 shadow-glow text-white relative overflow-hidden fade-in">
+                    <div class="absolute -right-5 -top-5 w-32 h-32 bg-white opacity-10 rounded-full blur-2xl"></div>
+                    <div class="absolute -left-5 -bottom-5 w-24 h-24 bg-white opacity-10 rounded-full blur-xl"></div>
+                    
+                    <p class="text-sm opacity-90 font-light">งานของฉันวันนี้</p>
+                    <h2 class="text-4xl font-bold mt-1">${visibleTasks.length} <span class="text-lg font-normal">งาน</span></h2>
+                    
+                    <div class="flex items-center gap-4 mt-6">
+                        <div class="flex items-center gap-1.5 bg-white/20 px-3 py-1 rounded-full text-xs backdrop-blur-sm">
+                            <div class="w-2 h-2 rounded-full bg-green-300"></div> Online: ${onlineCount}
+                        </div>
+                        <div class="flex items-center gap-1.5 bg-white/20 px-3 py-1 rounded-full text-xs backdrop-blur-sm">
+                            <div class="w-2 h-2 rounded-full bg-orange-300"></div> F2F: ${f2fCount}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Today's List Header -->
+                <div class="flex justify-between items-end px-1 fade-in" style="animation-delay: 0.1s">
+                    <h3 class="font-bold text-slate-700">รายการวันนี้</h3>
+                    <button onclick="navigateTo('schedules')" class="text-xs text-cyan-600 font-medium">ดูทั้งหมด</button>
+                </div>
+
+                <!-- List -->
+                <div class="space-y-3 fade-in" style="animation-delay: 0.2s">
+            `;
+
+            if (visibleTasks.length === 0) {
+                html += `<div class="text-center py-10 text-slate-400 text-sm bg-white rounded-xl border border-dashed border-slate-200">ไม่มีงานวันนี้</div>`;
+            } else {
+                visibleTasks.forEach(task => {
+                    const partnerColor = getPartnerColor(task.partner);
+                    const avatarUrl = task.profiles?.avatar_url || 
+                        `https://ui-avatars.com/api/?name=${encodeURIComponent(task.profiles?.display_name || 'User')}&background=2563eb&color=fff`;
+                    
+                    html += `
+                        <div class="bg-white p-4 rounded-xl shadow-soft border border-slate-50 flex items-start gap-3">
+                            <div class="w-1 min-h-[50px] rounded-full self-stretch ${partnerColor}"></div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-start">
+                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 mb-1 inline-block">${task.partner}</span>
+                                    <span class="text-xs font-semibold text-slate-400">${task.start_time.slice(0,5)} - ${task.end_time.slice(0,5)}</span>
+                                </div>
+                                <h4 class="font-bold text-sm text-slate-800 line-clamp-1">${task.course_detail}</h4>
+                                <div class="flex items-center gap-2 mt-2">
+                                    <img src="${avatarUrl}" class="w-5 h-5 rounded-full border border-white shadow-sm">
+                                    <span class="text-xs text-slate-500">${task.profiles?.display_name}</span>
+                                    <span class="text-[10px] text-slate-400 ml-auto flex items-center gap-1">
+                                        <i class="fa-solid fa-location-dot"></i> ${task.method === 'Online' ? 'Online' : task.location}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        // 2. SCHEDULE LIST
+        function renderScheduleList(container) {
+            // Group by Date
+            const grouped = schedulesCache.reduce((acc, task) => {
+                (acc[task.date] = acc[task.date] || []).push(task);
+                return acc;
+            }, {});
+
+            const sortedDates = Object.keys(grouped).sort();
+
+            let html = `
+                <div class="sticky top-0 bg-slate-50 pt-2 pb-4 z-10">
+                    <h3 class="font-bold text-lg px-1">ตารางงานทั้งหมด</h3>
+                    <!-- Date Strip -->
+                    <div class="flex gap-2 mt-3 overflow-x-auto no-scrollbar pb-1">
+                        ${generateDateStrip()}
+                    </div>
+                </div>
+                <div class="space-y-3 pb-20">
+            `;
+
+            if (sortedDates.length === 0) {
+                html += `<div class="text-center py-16 text-slate-400 text-sm">ไม่มีตารางงาน</div>`;
+            } else {
+                sortedDates.forEach(date => {
+                    const prettyDate = new Date(date).toLocaleDateString('th-TH', { weekday:'short', day:'numeric', month:'short'});
+                    html += `<div class="text-xs font-bold text-slate-400 mt-4 mb-2 pl-1">${prettyDate}</div>`;
+                    
+                    grouped[date].forEach(task => {
+                        const isOwner = task.trainer_id === userProfile.id;
+                        const canEdit = ['Master', 'Admin'].includes(userProfile.role) || isOwner;
+                        const partnerColor = getPartnerColor(task.partner);
+                        const avatarUrl = task.profiles?.avatar_url || 
+                            `https://ui-avatars.com/api/?name=${encodeURIComponent(task.profiles?.display_name || 'User')}&background=2563eb&color=fff`;
+
+                        html += `
+                            <div class="bg-white p-4 rounded-xl shadow-soft border border-slate-50 flex items-start gap-3 relative group">
+                                <div class="w-1 min-h-[50px] rounded-full self-stretch ${partnerColor}"></div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between items-start">
+                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 mb-1 inline-block">${task.partner} : ${task.method}</span>
+                                        <span class="text-xs font-bold text-cyan-600">${task.start_time.slice(0,5)}</span>
+                                    </div>
+                                    <h4 class="font-bold text-sm text-slate-800">${task.course_detail}</h4>
+                                    <div class="flex items-center gap-2 mt-2">
+                                        <img src="${avatarUrl}" class="w-5 h-5 rounded-full border border-white">
+                                        <span class="text-xs text-slate-500">${task.profiles?.display_name}</span>
+                                        <div class="ml-auto text-xs text-slate-400">@ ${task.location}</div>
+                                    </div>
+                                </div>
+                                ${canEdit ? `
+                                    <button onclick="deleteSchedule('${task.id}')" class="absolute top-2 right-2 text-slate-200 hover:text-red-500 p-2">
+                                        <i class="fa-solid fa-trash text-xs"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        `;
+                    });
+                });
+            }
+
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        // 3. CREATE FORM
+        function renderCreateForm(container) {
+            const today = new Date().toISOString().split('T')[0];
+            
+            let trainerSelectHTML = '';
+            if (['Master', 'Admin'].includes(userProfile.role)) {
+                const profiles = currentMode === 'production' ? allProfiles : SYSTEM_CONFIG.uat.mock_data.accounts;
+                trainerSelectHTML = `
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1 ml-1">เทรนเนอร์</label>
+                        <select id="f-trainer" class="input-rounded w-full px-4 py-3 bg-white text-sm">
+                            ${profiles.map(p => `<option value="${p.id}">${p.display_name} (${p.team})</option>`).join('')}
+                        </select>
+                    </div>
+                `;
+            } else {
+                trainerSelectHTML = `<input type="hidden" id="f-trainer" value="${userProfile.id}">`;
+            }
+
+            container.innerHTML = `
+                <div class="flex items-center gap-2 mb-4">
+                    <button onclick="navigateTo('schedules')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i></button>
+                    <h2 class="text-xl font-bold">สร้างตารางงานใหม่</h2>
+                </div>
+
+                <form id="create-form" class="space-y-4 bg-white p-5 rounded-2xl shadow-soft">
+                    
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1 ml-1">วันที่</label>
+                        <input type="date" id="f-date" required class="input-rounded w-full px-4 py-3 bg-white text-sm" value="${today}">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1 ml-1">เริ่ม</label>
+                            <input type="time" id="f-start" required class="input-rounded w-full px-4 py-3 bg-white text-sm" value="09:00">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1 ml-1">สิ้นสุด</label>
+                            <input type="time" id="f-end" required class="input-rounded w-full px-4 py-3 bg-white text-sm" value="12:00">
+                        </div>
+                    </div>
+
+                    ${trainerSelectHTML}
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1 ml-1">Partner</label>
+                        <div class="flex gap-2">
+                            ${PARTNERS.map(p => `
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="f-partner" value="${p}" class="peer sr-only" ${p==='ttb'?'checked':''}>
+                                    <span class="px-3 py-1.5 rounded-lg bg-slate-100 text-xs font-medium text-slate-500 peer-checked:bg-blue-600 peer-checked:text-white transition-all block border border-transparent peer-checked:shadow-md">${p}</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1 ml-1">รูปแบบ</label>
+                        <div class="flex gap-2">
+                            <label class="cursor-pointer flex-1">
+                                <input type="radio" name="f-method" value="Online" class="peer sr-only">
+                                <span class="w-full text-center px-3 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-500 peer-checked:border-cyan-500 peer-checked:text-cyan-600 peer-checked:bg-cyan-50 transition-all block"><i class="fa-solid fa-video mr-1"></i> Online</span>
+                            </label>
+                            <label class="cursor-pointer flex-1">
+                                <input type="radio" name="f-method" value="f2f" class="peer sr-only" checked>
+                                <span class="w-full text-center px-3 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-500 peer-checked:border-cyan-500 peer-checked:text-cyan-600 peer-checked:bg-cyan-50 transition-all block"><i class="fa-solid fa-handshake mr-1"></i> Face-to-Face</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1 ml-1">รายละเอียดหลักสูตร</label>
+                        <textarea id="f-detail" rows="2" required class="input-rounded w-full px-4 py-3 bg-white text-sm" placeholder="เช่น Role-play 10/5..."></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1 ml-1">สถานที่</label>
+                        <input type="text" id="f-location" required class="input-rounded w-full px-4 py-3 bg-white text-sm" placeholder="@SYM office">
+                    </div>
+
+                    <button type="submit" class="w-full bg-gradient-primary text-white font-bold py-4 rounded-xl shadow-glow active:scale-95 transition-transform mt-4 text-sm">
+                        บันทึกตารางงาน
+                    </button>
+                </form>
+            `;
+
+            document.getElementById('create-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const formData = {
+                    date: document.getElementById('f-date').value,
+                    start_time: document.getElementById('f-start').value,
+                    end_time: document.getElementById('f-end').value,
+                    trainer_id: document.getElementById('f-trainer').value,
+                    partner: document.querySelector('input[name="f-partner"]:checked').value,
+                    method: document.querySelector('input[name="f-method"]:checked').value,
+                    course_detail: document.getElementById('f-detail').value,
+                    location: document.getElementById('f-location').value
+                };
+                saveSchedule(formData);
+            });
+        }
+
+        // 4. SUMMARY (LINE)
+        function renderSummary(container) {
+            if (userProfile.role === 'Trainer') {
+                container.innerHTML = `<div class="text-center mt-20 text-slate-400">คุณไม่มีสิทธิ์เข้าถึงหน้านี้</div>`;
+                return;
+            }
+
+            // Calculate Tomorrow
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowStr = tomorrow.toISOString().split('T')[0];
+            const displayDate = tomorrow.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+            const tasks = schedulesCache.filter(s => s.date === tomorrowStr);
+            
+            // Build Text
+            let text = `${displayDate}\n\n`;
+
+            // Group by Team
+            const teams = [...new Set(tasks.map(t => t.team_group || 'No Team'))];
+            
+            teams.forEach(team => {
+                text += `♡ ${team}\n`;
+                
+                // Tasks in team
+                const teamTasks = tasks.filter(t => t.team_group === team);
+                // Group by Trainer
+                const trainers = [...new Set(teamTasks.map(t => t.profiles.display_name))];
+
+                trainers.forEach(trainer => {
+                    text += `● ${trainer}\n`;
+                    const myTasks = teamTasks.filter(t => t.profiles.display_name === trainer);
+                    myTasks.sort((a,b) => a.start_time.localeCompare(b.start_time));
+                    
+                    myTasks.forEach(t => {
+                        text += `- ${t.partner}:(${t.method}) ${t.course_detail} ${t.location === 'Online' ? '' : '@'+t.location}\n`;
+                        text += `(${t.start_time.slice(0,5)}-${t.end_time.slice(0,5)})\n`;
+                    });
+                });
+                text += `…………..…………..…………..……\n`;
+            });
+
+            container.innerHTML = `
+                 <div class="flex items-center gap-2 mb-4">
+                    <h2 class="text-xl font-bold">สรุปงานส่ง LINE</h2>
+                    <span class="text-xs bg-cyan-100 text-cyan-600 px-2 py-0.5 rounded-full">วันพรุ่งนี้</span>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 font-mono text-xs text-slate-600 whitespace-pre-wrap leading-relaxed select-all" id="copy-target">${text}</div>
+
+                <button onclick="copySummary()" class="w-full bg-gradient-primary text-white font-bold py-4 rounded-xl shadow-glow active:scale-95 transition-transform mt-4 text-sm flex items-center justify-center gap-2">
+                    <i class="fa-regular fa-copy"></i> คัดลอกทั้งหมด
+                </button>
+            `;
+        }
+
+        // 5. PROFILE
+        function renderProfile(container) {
+            const avatarUrl = userProfile.avatar_url || 
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile.display_name)}&background=2563eb&color=fff&bold=true`;
+            
+            container.innerHTML = `
+                <div class="flex flex-col items-center pt-8 pb-6">
+                    <div class="w-24 h-24 rounded-full p-1 bg-gradient-primary shadow-glow mb-4">
+                        <img src="${avatarUrl}" class="w-full h-full rounded-full border-4 border-white object-cover">
+                    </div>
+                    <h2 class="text-xl font-bold text-slate-800">${userProfile.display_name}</h2>
+                    <p class="text-sm text-slate-400">${userProfile.role} | ${userProfile.team}</p>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-soft overflow-hidden">
+                    <button class="w-full px-5 py-4 flex items-center gap-3 border-b border-slate-50 hover:bg-slate-50 transition-colors text-left">
+                        <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center"><i class="fa-solid fa-user-pen"></i></div>
+                        <span class="text-sm font-medium text-slate-700">แก้ไขข้อมูลส่วนตัว</span>
+                        <i class="fa-solid fa-chevron-right ml-auto text-xs text-slate-300"></i>
+                    </button>
+                    <button class="w-full px-5 py-4 flex items-center gap-3 border-b border-slate-50 hover:bg-slate-50 transition-colors text-left">
+                         <div class="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center"><i class="fa-solid fa-key"></i></div>
+                        <span class="text-sm font-medium text-slate-700">เปลี่ยนรหัสผ่าน</span>
+                         <i class="fa-solid fa-chevron-right ml-auto text-xs text-slate-300"></i>
+                    </button>
+                </div>
+
+                <div class="mt-6 space-y-3">
+                    <div class="bg-slate-50 rounded-xl p-4">
+                        <p class="text-xs font-medium text-slate-600 mb-1">โหมดการทำงานปัจจุบัน:</p>
+                        <p class="text-sm font-bold ${currentMode === 'production' ? 'text-green-600' : 'text-orange-600'}">
+                            ${currentMode === 'production' ? 'Production (ระบบจริง)' : 'UAT/Mockup (ระบบทดสอบ)'}
+                        </p>
+                    </div>
+                    
+                    <button onclick="backToModeSelection()" class="w-full text-slate-600 border border-slate-200 font-medium py-3 rounded-xl active:scale-95 transition-transform text-sm">
+                        เปลี่ยนโหมดการทำงาน
+                    </button>
+                    
+                    <button onclick="logout()" class="w-full bg-red-50 text-red-500 font-bold py-4 rounded-xl active:scale-95 transition-transform text-sm">
+                        ออกจากระบบ
+                    </button>
+                </div>
+            `;
+        }
+        
+        // 6. AVAILABILITY
+        function renderAvailability(container) {
+             container.innerHTML = `
+                <h2 class="text-xl font-bold mb-4">ตรวจสอบวันว่าง</h2>
+                
+                <!-- Modes -->
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                     <button class="p-3 bg-white border border-cyan-500 text-cyan-600 rounded-xl text-xs font-bold shadow-sm">
+                        <i class="fa-solid fa-calendar-check block text-xl mb-1"></i> ภาพรวมเดือน
+                     </button>
+                     <button class="p-3 bg-white border border-slate-100 text-slate-500 rounded-xl text-xs font-bold shadow-sm opacity-50">
+                        <i class="fa-solid fa-user-check block text-xl mb-1"></i> เช็ครายคน
+                     </button>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-soft text-center py-10">
+                    <p class="text-slate-400 text-sm">ฟีเจอร์นี้อยู่ระหว่างการพัฒนา<br>(Available in Phase 2)</p>
+                </div>
+             `;
+        }
+
+        // ==========================================
+        // UTILITY FUNCTIONS
+        // ==========================================
+        function showLoading(isLoading) {
+            const el = document.getElementById('loading-overlay');
+            if (isLoading) el.classList.remove('hidden');
+            else el.classList.add('hidden');
+        }
+
+        function copySummary() {
+            const text = document.getElementById('copy-target').innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('คัดลอกเรียบร้อย!');
+            });
+        }
+
+        function getPartnerColor(partner) {
+            switch(partner) {
+                case 'ttb': return 'bg-blue-800';
+                case 'PD': return 'bg-red-600';
+                case 'PRU': return 'bg-red-500';
+                case 'TTT': return 'bg-orange-500';
+                default: return 'bg-slate-300';
+            }
+        }
+
+        function generateDateStrip() {
+            let html = '';
+            for(let i=0; i<7; i++) {
+                const d = new Date();
+                d.setDate(d.getDate() + i);
+                const day = d.toLocaleDateString('th-TH', { weekday: 'short' });
+                const num = d.getDate();
+                const active = i===0 ? 'bg-gradient-primary text-white shadow-glow' : 'bg-white text-slate-500 border border-slate-100';
+                html += `
+                    <div class="flex-shrink-0 w-12 h-14 rounded-xl ${active} flex flex-col items-center justify-center snap-start">
+                        <span class="text-[10px] opacity-80">${day}</span>
+                        <span class="font-bold text-sm">${num}</span>
+                    </div>
+                `;
+            }
+            return html;
+        }
+
+        // ==========================================
+        // INITIALIZATION
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check for saved mode
+            const savedMode = localStorage.getItem('ttb-trainer-mode');
+            
+            if (savedMode === 'production' || savedMode === 'uat') {
+                selectMode(savedMode);
+            }
+            
+            // Setup login form
+            document.getElementById('login-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                login(
+                    document.getElementById('email').value,
+                    document.getElementById('password').value
+                );
+            });
+        });
+
+    </script>
 </body>
 </html>
